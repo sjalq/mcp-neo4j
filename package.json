@@ -17,6 +17,7 @@
     "@nx/js": "20.1.4",
     "@nx/node": "20.1.4",
     "@nx/workspace": "20.1.4",
+    "@nxlv/python": "^20.0.1",
     "@swc-node/register": "~1.9.1",
     "@swc/core": "~1.5.7",
     "@swc/helpers": "~0.5.11",

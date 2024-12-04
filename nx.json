@@ -40,6 +40,9 @@
         "servers/mcp-neo4j-memory-e2e/**/*",
         "servers/mcp-json-memory-e2e/**/*"
       ]
+    },
+    {
+      "plugin":"@nxlv/python"
     }
   ],
   "release": {
