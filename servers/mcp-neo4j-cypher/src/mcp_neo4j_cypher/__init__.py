@@ -6,7 +6,7 @@ import os
 
 def main():
     """Main entry point for the package."""
-    parser = argparse.ArgumentParser(description='Neo4j MCP Server')
+    parser = argparse.ArgumentParser(description='Neo4j Cypher MCP Server')
     parser.add_argument('--db-url', 
                        default="bolt://localhost:7687",
                        help='Neo4j connection URL')

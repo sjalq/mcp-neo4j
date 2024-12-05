@@ -12,7 +12,7 @@ from typing import Any
 from neo4j import GraphDatabase
 import re
 
-logger = logging.getLogger('mcp_neo4j_server')
+logger = logging.getLogger('mcp_neo4j_cypher')
 logger.info("Starting MCP neo4j Server")
 
 def is_write_query(query: str) -> bool:
