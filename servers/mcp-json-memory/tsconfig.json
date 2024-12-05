@@ -3,7 +3,6 @@
   "files": [],
   "include": [],
   "references": [
-    // @ts-ignore -> https://github.com/nrwl/nx/issues/27292
     {
       "path": "./tsconfig.app.json"
     },

@@ -2,45 +2,92 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { promises as fs } from 'fs';
+
+import neo4j, { Integer, Node, Relationship, Driver as Neo4jDriver } from 'neo4j-driver'
+
 import { KnowledgeGraphMemory, Entity, KnowledgeGraph, Relation } from "@neo4j/graphrag-memory";
 
-// Default path to the JSONL file, you can change this to your desired local path 
-// by passing in an arg to the memory-server
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_MEMORY_FILE_PATH = path.join(__dirname, 'memory.json');
+type EntityNode = Node<Integer, Entity>
 
-// The JsonMemory class contains all operations to interact with the knowledge graph
-export class JsonMemory implements KnowledgeGraphMemory {
-  private memoryFilePath: string;
-  constructor(args: string[]) {
-    this.memoryFilePath = (args.length > 0) ? args[0] : DEFAULT_MEMORY_FILE_PATH;
-  }
+type EntityRelationship = Relationship<Integer, Relation>
+
+interface EntityWithRelationsResult {
+  entity: EntityNode,
+  relations: EntityRelationship[]
+}
+
+export class Neo4jMemory implements KnowledgeGraphMemory {
+  constructor(private neo4jDriver: Neo4jDriver) { }
 
   private async loadGraph(): Promise<KnowledgeGraph> {
+    const session = this.neo4jDriver.session()
+
     try {
-      const data = await fs.readFile(this.memoryFilePath, "utf-8");
-      const lines = data.split("\n").filter(line => line.trim() !== "");
-      return lines.reduce((graph: KnowledgeGraph, line) => {
-        const item = JSON.parse(line);
-        if (item.type === "entity") graph.entities.push(item as Entity);
-        if (item.type === "relation") graph.relations.push(item as Relation);
-        return graph;
-      }, { entities: [], relations: [] });
+      // Execute a Cypher statement in a Read Transaction
+      const res = await session.executeRead(tx => tx.run<EntityWithRelationsResult>(`
+        MATCH (entity:Memory)
+        OPTIONAL MATCH (entity)-[r]->(other)
+        RETURN entity, collect(r) as relations
+      `))
+      const kgMemory:KnowledgeGraph = res.records.reduce(
+        (kg, row) => {
+          const entityNode = row.get('entity');
+          const entityRelationships = row.get('relations');
+
+          kg.entities.push(entityNode.properties);
+          kg.relations.push(...entityRelationships.map(r => r.properties))
+          return kg
+        }, 
+        ({entities:[], relations:[]} as KnowledgeGraph)
+      )
+  
+      console.error(JSON.stringify(kgMemory.entities))
+      console.error(JSON.stringify(kgMemory.relations))
+
+      return kgMemory
     } catch (error) {
-      if (error instanceof Error && 'code' in error && (error as any).code === "ENOENT") {
-        console.error(`Error! (${error})`);
-        return { entities: [], relations: [] };
-      }
-      throw error;
+      console.error(error)
     }
+    finally {
+      // Close the Session
+      await session.close()
+    }
+    
+    return {
+      entities: [],
+      relations: []    
+    };
   }
 
   private async saveGraph(graph: KnowledgeGraph): Promise<void> {
-    const lines = [
-      ...graph.entities.map(e => JSON.stringify({ type: "entity", ...e })),
-      ...graph.relations.map(r => JSON.stringify({ type: "relation", ...r })),
-    ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+    const session = this.neo4jDriver.session()
+
+    return session.executeWrite(async txc => {
+      await txc.run(`
+        UNWIND $memoryGraph.entities as entity
+        MERGE (entityMemory:Memory { entityID: entity.name })
+        SET entityMemory += entity
+        `
+        ,
+        {
+          memoryGraph:graph
+        }
+      )
+      await txc.run(`
+        UNWIND $memoryGraph.relations as relation
+        MATCH (from:Memory),(to:Memory)
+        WHERE from.entityID = relation.from
+          AND  to.entityID = relation.to
+        MERGE (from)-[r:Memory {relationType:relation.relationType}]->(to)
+        `
+        ,
+        {
+          memoryGraph:graph
+        }
+      )
+
+    })
+  
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
@@ -117,8 +164,8 @@ export class JsonMemory implements KnowledgeGraphMemory {
 
     // Filter entities
     const filteredEntities = graph.entities.filter(e => 
-      e.name.toLowerCase().includes(query.toLowerCase()) ||
-      e.entityType.toLowerCase().includes(query.toLowerCase()) ||
+      query.toLowerCase().includes(e.name.toLowerCase()) ||
+      query.toLowerCase().includes(e.entityType.toLowerCase()) ||
       e.observations.some(o => o.toLowerCase().includes(query.toLowerCase()))
     );
   

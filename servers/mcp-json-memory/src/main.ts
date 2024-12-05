@@ -4,7 +4,6 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-// import { KnowledgeGraphMemory, Entity, KnowledgeGraph, Relation } from "./types.js";
 import { KnowledgeGraphMemory, Entity, KnowledgeGraph, Relation } from "@neo4j/graphrag-memory";
 import { JsonMemory } from './json-memory.js'
 
@@ -238,7 +237,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("MCP Knowledge Graph Memory using JSON running on stdio");
+  console.error("MCP Knowledge Graph Memory using Neo4j running on stdio");
 }
 
 main().catch((error) => {
