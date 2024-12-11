@@ -28,7 +28,7 @@ jobs:
 
       - name: Build release distributions
         run: |
-          cd mcp-neo4j-cypher/
+          cd servers/mcp-neo4j-cypher/
           python -m pip install build
           python -m build
 
@@ -36,7 +36,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-dists
-          path: mcp-neo4j-cypher/dist/
+          path: servers/mcp-neo4j-cypher/dist/
 
   pypi-publish:
     runs-on: ubuntu-latest
@@ -57,9 +57,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: release-dists
-          path: mcp-neo4j-cypher/dist/
+          path: servers/mcp-neo4j-cypher/dist/
 
       - name: Publish release distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: mcp-neo4j-cypher/dist/
+          packages-dir: servers/mcp-neo4j-cypher/dist/
