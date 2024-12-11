@@ -36,7 +36,52 @@ The server offers six core tools:
 
 ## Usage with Claude Desktop
 
-```bash
+### Released Package
+
+Can be found on PyPi https://pypi.org/project/mcp-neo4j-cypher/
+
+Add the server to your `claude_desktop_config.json` with configuration of 
+
+* db-url
+* username
+* password
+
+```json
+"mcpServers": {
+  "neo4j": {
+    "command": "uvx",
+    "args": [
+      "mcp-neo4j-cypher",
+      "--db-url",
+      "bolt://localhost",
+      "--username",
+      "neo4j",
+      "--password",
+      "<your-password>"
+    ]
+  }
+}
+```
+
+Here is an example connection for the movie database with Movie, Person (Actor, Director), Genre, User and ratings.
+
+```json
+{
+  "mcpServers": {
+    "movies-neo4j": {
+      "command": "uvx",
+      "args": ["mcp-neo4j-cypher", 
+      "--db-url", "neo4j+s://demo.neo4jlabs.com", 
+      "--user", "recommendations", 
+      "--password", "recommendations"]
+    }   
+  }
+}
+```
+
+### Development
+
+```json
 # Add the server to your claude_desktop_config.json
 "mcpServers": {
   "neo4j": {
@@ -45,7 +90,7 @@ The server offers six core tools:
       "--directory",
       "parent_of_servers_repo/servers/src/neo4j",
       "run",
-      "mcp-server-neo4j",
+      "mcp-neo4j-cypher",
       "--db-url",
       "bolt://localhost",
       "--username",
