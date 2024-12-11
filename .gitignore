@@ -17,6 +17,9 @@ node_modules
 .settings/
 *.sublime-workspace
 
+# python venc
+.venv
+
 # IDE - VSCode
 .vscode/*
 !.vscode/settings.json
