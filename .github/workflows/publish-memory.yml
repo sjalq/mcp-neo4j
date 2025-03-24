@@ -23,10 +23,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "pyproject.toml"
+          
       - name: Build release distributions
         run: |
           cd servers/mcp-neo4j-memory/
