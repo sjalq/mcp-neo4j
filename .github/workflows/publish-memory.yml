@@ -50,4 +50,5 @@ jobs:
 
       - name: Publish release
         run: |
+          cd servers/mcp-neo4j-memory/
           uv publish
