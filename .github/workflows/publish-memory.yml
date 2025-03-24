@@ -29,8 +29,8 @@ jobs:
       - name: "Set up Python"
         uses: actions/setup-python@v5
         with:
-          python-version-file: "pyproject.toml"
-          
+          python-version-file: "servers/mcp-neo4j-memory/pyproject.toml"
+
       - name: Build release distributions
         run: |
           cd servers/mcp-neo4j-memory/
