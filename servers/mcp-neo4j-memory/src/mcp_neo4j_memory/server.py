@@ -62,7 +62,7 @@ class Neo4jMemory:
     async def load_graph(self, filter_query="*"):
         query = """
             CALL db.index.fulltext.queryNodes('search', $filter) yield node as entity, score
-            OPTIONAL MATCH (entity)-[r]->(other)
+            OPTIONAL MATCH (entity)-[r]-(other)
             RETURN collect(distinct {
                 name: entity.name, 
                 type: entity.type, 

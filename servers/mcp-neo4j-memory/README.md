@@ -15,12 +15,26 @@ The MCP server leverages Neo4j's graph database capabilities to create an interc
 * `Memory` - A node representing an entity with a name, type, and observations.
 * `Relationship` - A relationship between two entities with a type.
 
+### Usage Example
+
+```
+Let's add some memories 
+I, Michael, living in Dresden, Germany work at Neo4j which is headquartered in Sweden with my colleagues Andreas (Cambridge, UK) and Oskar (Gothenburg, Sweden)
+I work in Product Management, Oskar in Engineering and Andreas in Developer Relations.
+```
+
+Results in Claude calling the create_entities and create_relations tools.
+
+![](./docs/images/employee_create_entities_and_relations.png)
+
+![](./docs/images/employee_graph.png)
+
 ## Components
 
+<!--
 ### Resources
-
 ### Prompts
-
+-->
 ### Tools
 
 The server offers these core tools:
