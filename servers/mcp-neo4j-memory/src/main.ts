@@ -6,24 +6,30 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { driver as connectToNeo4j, auth as Neo4jAuth } from 'neo4j-driver'
-
 import { KnowledgeGraphMemory, Entity, KnowledgeGraph, Relation } from "@neo4j/graphrag-memory";
 import { Neo4jMemory } from './neo4j-memory.js'
 
+// Get Neo4j connection details from environment variables
+const neo4jUri = process.env.NEO4J_URI || 'neo4j://localhost:7687';
+const neo4jUser = process.env.NEO4J_USERNAME || 'neo4j';
+const neo4jPassword = process.env.NEO4J_PASSWORD;
 
-// const args = process.argv.slice(2);
+if (!neo4jPassword) {
+  console.error('Error: NEO4J_PASSWORD environment variable is required');
+  process.exit(1);
+}
 
 const neo4jDriver = connectToNeo4j(
-  'neo4j://localhost:7687',
-  Neo4jAuth.basic('neo4j', 'marwhompa')
-)
+  neo4jUri,
+  Neo4jAuth.basic(neo4jUser, neo4jPassword)
+);
 
 const knowledgeGraphMemory:KnowledgeGraphMemory = new Neo4jMemory(neo4jDriver);
 
 // The server instance and tools exposed to Claude
 const server = new Server({
   name: "mcp-neo4j-memory",
-  version: "1.0.1",
+  version: "1.1",
 },    {
     capabilities: {
       tools: {},
