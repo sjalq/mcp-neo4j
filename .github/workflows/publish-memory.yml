@@ -49,6 +49,8 @@ jobs:
           uv build
 
       - name: Publish release
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           cd servers/mcp-neo4j-memory/
           uv publish
