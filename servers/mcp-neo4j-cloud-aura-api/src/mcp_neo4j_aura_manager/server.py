@@ -78,7 +78,11 @@ class AuraAPIClient:
         """Handle API response and errors."""
         try:
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            if "data" in data:
+                return data["data"]
+            else:
+                return data
         except requests.HTTPError as e:
             error_msg = f"HTTP error: {e}"
             try:
@@ -100,8 +104,7 @@ class AuraAPIClient:
         """List all database instances."""
         url = f"{self.BASE_URL}/instances"
         response = requests.get(url, headers=self._get_headers())
-        data = self._handle_response(response)
-        return data.get("data", [])
+        return self._handle_response(response)
     
     def get_instance_details(self, instance_ids: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """Get details for one or more instances by ID.
@@ -116,8 +119,7 @@ class AuraAPIClient:
             # Handle single instance ID
             url = f"{self.BASE_URL}/instances/{instance_ids}"
             response = requests.get(url, headers=self._get_headers())
-            data = self._handle_response(response)
-            return data.get("data", {})
+            return self._handle_response(response)
         else:
             # Handle list of instance IDs
             results = []
@@ -126,7 +128,7 @@ class AuraAPIClient:
                 response = requests.get(url, headers=self._get_headers())
                 try:
                     data = self._handle_response(response)
-                    results.append(data.get("data", {}))
+                    results.append(data)
                 except Exception as e:
                     results.append({"error": str(e), "instance_id": instance_id})
             return results
@@ -135,7 +137,7 @@ class AuraAPIClient:
         """Find an instance by name."""
         instances = self.list_instances()
         for instance in instances:
-            if instance.get("name") == name:
+            if name.lower() in instance.get("name", "").lower():
                 # Get full instance details using the instance ID
                 return self.get_instance_details(instance.get("id"))
         return None
@@ -197,101 +199,62 @@ class AuraAPIClient:
             payload["source_instance_id"] = source_instance_id
         
         response = requests.post(url, headers=self._get_headers(), json=payload)
-        data = self._handle_response(response)
-        return data.get("data", {})
+        return self._handle_response(response)
 
     
-    def update_instance(self, instance_ids: Union[str, List[str]], name: Optional[str] = None, 
+    def update_instance(self, instance_id: str, name: Optional[str] = None, 
                         memory: Optional[int] = None, 
-                        vector_optimized: Optional[bool] = None) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
-        """Update one or more existing instances."""
-        if isinstance(instance_ids, str):
-            # Handle single instance ID
-            url = f"{self.BASE_URL}/instances/{instance_ids}"
-            
-            payload = {}
-            if name is not None:
-                payload["name"] = name
-            if memory is not None:
-                payload["memory"] = memory
-            if vector_optimized is not None:
-                payload["vector_optimized"] = vector_optimized
-            
-            response = requests.patch(url, headers=self._get_headers(), json=payload)
-            return self._handle_response(response)
-        else:
-            # Handle list of instance IDs
-            results = []
-            for instance_id in instance_ids:
-                url = f"{self.BASE_URL}/instances/{instance_id}"
-                
-                payload = {}
-                if name is not None:
-                    payload["name"] = name
-                if memory is not None:
-                    payload["memory"] = memory
-                if vector_optimized is not None:
-                    payload["vector_optimized"] = vector_optimized
-                
-                try:
-                    response = requests.patch(url, headers=self._get_headers(), json=payload)
-                    results.append(self._handle_response(response))
-                except Exception as e:
-                    results.append({"error": str(e), "instance_id": instance_id})
-            return results
+                        vector_optimized: Optional[bool] = None) -> Dict[str, Any]:
+        """Update an existing instance."""
+        url = f"{self.BASE_URL}/instances/{instance_id}"
+        
+        payload = {}
+        if name is not None:
+            payload["name"] = name
+        if memory is not None:
+            payload["memory"] = memory
+        if vector_optimized is not None:
+            payload["vector_optimized"] = vector_optimized
+        
+        response = requests.patch(url, headers=self._get_headers(), json=payload)
+        return self._handle_response(response)
     
-    def pause_instance(self, instance_ids: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
-        """Pause one or more database instances."""
-        if isinstance(instance_ids, str):
-            # Handle single instance ID
-            url = f"{self.BASE_URL}/instances/{instance_ids}/pause"
-            response = requests.post(url, headers=self._get_headers())
-            return self._handle_response(response)
-        else:
-            # Handle list of instance IDs
-            results = []
-            for instance_id in instance_ids:
-                url = f"{self.BASE_URL}/instances/{instance_id}/pause"
-                try:
-                    response = requests.post(url, headers=self._get_headers())
-                    results.append(self._handle_response(response))
-                except Exception as e:
-                    results.append({"error": str(e), "instance_id": instance_id})
-            return results
+    def pause_instance(self, instance_id: str) -> Dict[str, Any]:
+        """Pause a database instance."""
+        url = f"{self.BASE_URL}/instances/{instance_id}/pause"
+        response = requests.post(url, headers=self._get_headers())
+        return self._handle_response(response)
     
-    def resume_instance(self, instance_ids: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
-        """Resume one or more paused database instances."""
-        if isinstance(instance_ids, str):
-            # Handle single instance ID
-            url = f"{self.BASE_URL}/instances/{instance_ids}/resume"
-            response = requests.post(url, headers=self._get_headers())
-            return self._handle_response(response)
-        else:
-            # Handle list of instance IDs
-            results = []
-            for instance_id in instance_ids:
-                url = f"{self.BASE_URL}/instances/{instance_id}/resume"
-                try:
-                    response = requests.post(url, headers=self._get_headers())
-                    results.append(self._handle_response(response))
-                except Exception as e:
-                    results.append({"error": str(e), "instance_id": instance_id})
-            return results
+    def resume_instance(self, instance_id: str) -> Dict[str, Any]:
+        """Resume a paused database instance."""
+        url = f"{self.BASE_URL}/instances/{instance_id}/resume"
+        response = requests.post(url, headers=self._get_headers())
+        return self._handle_response(response)
     
     def list_tenants(self) -> List[Dict[str, Any]]:
         """List all tenants/projects."""
         url = f"{self.BASE_URL}/tenants"
         response = requests.get(url, headers=self._get_headers())
-        data = self._handle_response(response)
-        return data.get("data", [])
+        return self._handle_response(response)
     
     def get_tenant_details(self, tenant_id: str) -> Dict[str, Any]:
         """Get details for a specific tenant/project."""
         url = f"{self.BASE_URL}/tenants/{tenant_id}"
         response = requests.get(url, headers=self._get_headers())
-        data = self._handle_response(response)
-        # Return the data object which contains the nested tenant details
-        return data.get("data", {})
+        return self._handle_response(response)
+
+    def delete_instance(self, instance_id: str) -> Dict[str, Any]:
+        """Delete a database instance.
+        
+        Args:
+            instance_id: ID of the instance to delete
+            
+        Returns:
+            Response dict with status information
+        """
+        url = f"{self.BASE_URL}/instances/{instance_id}"
+        response = requests.delete(url, headers=self._get_headers())
+        return self._handle_response(response)
 
 class AuraManager:
     """MCP server for Neo4j Aura instance management."""
@@ -310,17 +273,14 @@ class AuraManager:
         except Exception as e:
             return {"error": str(e)}
     
-    async def get_instance_details(self, instance_ids: Union[str, List[str]], **kwargs) -> Dict[str, Any]:
+    async def get_instance_details(self, instance_ids: List[str], **kwargs) -> Dict[str, Any]:
         """Get details for one or more instances by ID."""
         try:
             results = self.client.get_instance_details(instance_ids)
-            if isinstance(instance_ids, str):
-                return results
-            else:
-                return {
-                    "results": results,
-                    "count": len(results)
-                }
+            return {
+                "instances": results,
+                "count": len(results)
+            }
         except Exception as e:
             return {"error": str(e)}
     
@@ -356,77 +316,42 @@ class AuraManager:
         except Exception as e:
             return {"error": str(e)}
     
-    async def update_instance_name(self, instance_ids: Union[str, List[str]], name: str, **kwargs) -> Dict[str, Any]:
-        """Update one or more instances' names."""
+    async def update_instance_name(self, instance_id: str, name: str, **kwargs) -> Dict[str, Any]:
+        """Update an instance's name."""
         try:
-            results = self.client.update_instance(instance_ids=instance_ids, name=name)
-            if isinstance(instance_ids, str):
-                return results
-            else:
-                return {
-                    "results": results,
-                    "count": len(results)
-                }
+            return self.client.update_instance(instance_id=instance_id, name=name)
         except Exception as e:
             return {"error": str(e)}
     
-    async def update_instance_memory(self, instance_ids: Union[str, List[str]], memory: int, **kwargs) -> Dict[str, Any]:
-        """Update one or more instances' memory allocation."""
+    async def update_instance_memory(self, instance_id: str, memory: int, **kwargs) -> Dict[str, Any]:
+        """Update an instance's memory allocation."""
         try:
-            results = self.client.update_instance(instance_ids=instance_ids, memory=memory)
-            if isinstance(instance_ids, str):
-                return results
-            else:
-                return {
-                    "results": results,
-                    "count": len(results)
-                }
+            return self.client.update_instance(instance_id=instance_id, memory=memory)
         except Exception as e:
             return {"error": str(e)}
     
-    async def update_instance_vector_optimization(self, instance_ids: Union[str, List[str]], 
+    async def update_instance_vector_optimization(self, instance_id: str, 
                                                 vector_optimized: bool, **kwargs) -> Dict[str, Any]:
-        """Update one or more instances' vector optimization setting."""
+        """Update an instance's vector optimization setting."""
         try:
-            results = self.client.update_instance(
-                instance_ids=instance_ids, 
+            return self.client.update_instance(
+                instance_id=instance_id, 
                 vector_optimized=vector_optimized
             )
-            if isinstance(instance_ids, str):
-                return results
-            else:
-                return {
-                    "results": results,
-                    "count": len(results)
-                }
         except Exception as e:
             return {"error": str(e)}
     
-    async def pause_instance(self, instance_ids: Union[str, List[str]], **kwargs) -> Dict[str, Any]:
-        """Pause one or more database instances."""
+    async def pause_instance(self, instance_id: str, **kwargs) -> Dict[str, Any]:
+        """Pause a database instance."""
         try:
-            results = self.client.pause_instance(instance_ids)
-            if isinstance(instance_ids, str):
-                return results
-            else:
-                return {
-                    "results": results,
-                    "count": len(results)
-                }
+            return self.client.pause_instance(instance_id)
         except Exception as e:
             return {"error": str(e)}
     
-    async def resume_instance(self, instance_ids: Union[str, List[str]], **kwargs) -> Dict[str, Any]:
-        """Resume one or more paused database instances."""
+    async def resume_instance(self, instance_id: str, **kwargs) -> Dict[str, Any]:
+        """Resume a paused database instance."""
         try:
-            results = self.client.resume_instance(instance_ids)
-            if isinstance(instance_ids, str):
-                return results
-            else:
-                return {
-                    "results": results,
-                    "count": len(results)
-                }
+            return self.client.resume_instance(instance_id)
         except Exception as e:
             return {"error": str(e)}
     
@@ -448,6 +373,12 @@ class AuraManager:
         except Exception as e:
             return {"error": str(e)}
 
+    async def delete_instance(self, instance_id: str, **kwargs) -> Dict[str, Any]:
+        """Delete one database instance."""
+        try:
+            return self.client.delete_instance(instance_id=instance_id)
+        except Exception as e:
+            return {"error": str(e)}
 
 async def main(client_id: str, client_secret: str):
     """Start the MCP server."""
@@ -470,25 +401,18 @@ async def main(client_id: str, client_secret: str):
             ),
             types.Tool(
                 name="get_instance_details",
-                description="Get details for one or more Neo4j Aura instances by ID",
+                description="Get details for one or more Neo4j Aura instances by ID, including status, region, memory, storage",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "instance_ids": {
-                            "oneOf": [
-                                {
-                                    "type": "string",
-                                    "description": "ID of a single instance to retrieve"
+                            {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
                                 },
-                                {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "description": "List of instance IDs to retrieve"
-                                }
-                            ],
-                            "description": "ID(s) of the instance(s) to retrieve"
+                                "description": "List of instance IDs to retrieve"
+                            }
                         }
                     },
                     "required": ["instance_ids"],
@@ -496,7 +420,7 @@ async def main(client_id: str, client_secret: str):
             ),
             types.Tool(
                 name="get_instance_by_name",
-                description="Find a Neo4j Aura instance by name",
+                description="Find a Neo4j Aura instance by name and returns the details including the id",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -562,144 +486,84 @@ async def main(client_id: str, client_secret: str):
             ),
             types.Tool(
                 name="update_instance_name",
-                description="Update the name of one or more Neo4j Aura instances",
+                description="Update the name of a Neo4j Aura instance",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "instance_ids": {
-                            "oneOf": [
-                                {
-                                    "type": "string",
-                                    "description": "ID of a single instance to update"
-                                },
-                                {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "description": "List of instance IDs to update"
-                                }
-                            ],
-                            "description": "ID(s) of the instance(s) to update"
+                        "instance_id": {
+                            "type": "string",
+                            "description": "ID of the instance to update"
                         },
                         "name": {
                             "type": "string",
-                            "description": "New name for the instance(s)"
+                            "description": "New name for the instance"
                         }
                     },
-                    "required": ["instance_ids", "name"],
+                    "required": ["instance_id", "name"],
                 },
             ),
             types.Tool(
                 name="update_instance_memory",
-                description="Update the memory allocation of one or more Neo4j Aura instances",
+                description="Update the memory allocation of a Neo4j Aura instance",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "instance_ids": {
-                            "oneOf": [
-                                {
-                                    "type": "string",
-                                    "description": "ID of a single instance to update"
-                                },
-                                {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "description": "List of instance IDs to update"
-                                }
-                            ],
-                            "description": "ID(s) of the instance(s) to update"
+                        "instance_id": {
+                            "type": "string",
+                            "description": "ID of the instance to update"
                         },
                         "memory": {
                             "type": "integer",
                             "description": "New memory allocation in GB"
                         }
                     },
-                    "required": ["instance_ids", "memory"],
+                    "required": ["instance_id", "memory"],
                 },
             ),
             types.Tool(
                 name="update_instance_vector_optimization",
-                description="Update the vector optimization setting of one or more Neo4j Aura instances",
+                description="Update the vector optimization setting of a Neo4j Aura instance",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "instance_ids": {
-                            "oneOf": [
-                                {
-                                    "type": "string",
-                                    "description": "ID of a single instance to update"
-                                },
-                                {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "description": "List of instance IDs to update"
-                                }
-                            ],
-                            "description": "ID(s) of the instance(s) to update"
+                        "instance_id": {
+                            "type": "string",
+                            "description": "ID of the instance to update"
                         },
                         "vector_optimized": {
                             "type": "boolean",
-                            "description": "Whether the instance(s) should be optimized for vector operations"
+                            "description": "Whether the instance should be optimized for vector operations"
                         }
                     },
-                    "required": ["instance_ids", "vector_optimized"],
+                    "required": ["instance_id", "vector_optimized"],
                 },
             ),
             types.Tool(
                 name="pause_instance",
-                description="Pause one or more Neo4j Aura database instances",
+                description="Pause a Neo4j Aura database instance",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "instance_ids": {
-                            "oneOf": [
-                                {
-                                    "type": "string",
-                                    "description": "ID of a single instance to pause"
-                                },
-                                {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "description": "List of instance IDs to pause"
-                                }
-                            ],
-                            "description": "ID(s) of the instance(s) to pause"
+                        "instance_id": {
+                            "type": "string",
+                            "description": "ID of the instance to pause"
                         }
                     },
-                    "required": ["instance_ids"],
+                    "required": ["instance_id"],
                 },
             ),
             types.Tool(
                 name="resume_instance",
-                description="Resume one or more paused Neo4j Aura database instances",
+                description="Resume a paused Neo4j Aura database instance",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "instance_ids": {
-                            "oneOf": [
-                                {
-                                    "type": "string",
-                                    "description": "ID of a single instance to resume"
-                                },
-                                {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "description": "List of instance IDs to resume"
-                                }
-                            ],
-                            "description": "ID(s) of the instance(s) to resume"
+                        "instance_id": {
+                            "type": "string",
+                            "description": "ID of the instance to resume"
                         }
                     },
-                    "required": ["instance_ids"],
+                    "required": ["instance_id"],
                 },
             ),
             types.Tool(
@@ -724,6 +588,24 @@ async def main(client_id: str, client_secret: str):
                     "required": ["tenant_id"],
                 },
             ),
+            types.Tool(
+                name="delete_instance",
+                description="Delete a Neo4j Aura database instance",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "tenant_id": {
+                            "type": "string",
+                            "description": "ID of the tenant/project where the instance exists"
+                        },
+                        "instance_id": {
+                            "type": "string",
+                            "description": "ID of the instance to delete"
+                        }
+                    },
+                    "required": ["tenant_id", "instance_id"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -739,9 +621,6 @@ async def main(client_id: str, client_secret: str):
                 return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 
             elif name == "get_instance_details":
-                # Rename instance_id to instance_ids in arguments if needed
-                if "instance_id" in arguments and "instance_ids" not in arguments:
-                    arguments["instance_ids"] = arguments.pop("instance_id")
                 result = await aura_manager.get_instance_details(**arguments)
                 return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 
@@ -754,37 +633,22 @@ async def main(client_id: str, client_secret: str):
                 return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 
             elif name == "update_instance_name":
-                # Rename instance_id to instance_ids in arguments if needed
-                if "instance_id" in arguments and "instance_ids" not in arguments:
-                    arguments["instance_ids"] = arguments.pop("instance_id")
                 result = await aura_manager.update_instance_name(**arguments)
                 return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 
             elif name == "update_instance_memory":
-                # Rename instance_id to instance_ids in arguments if needed
-                if "instance_id" in arguments and "instance_ids" not in arguments:
-                    arguments["instance_ids"] = arguments.pop("instance_id")
                 result = await aura_manager.update_instance_memory(**arguments)
                 return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 
             elif name == "update_instance_vector_optimization":
-                # Rename instance_id to instance_ids in arguments if needed
-                if "instance_id" in arguments and "instance_ids" not in arguments:
-                    arguments["instance_ids"] = arguments.pop("instance_id")
                 result = await aura_manager.update_instance_vector_optimization(**arguments)
                 return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 
             elif name == "pause_instance":
-                # Rename instance_id to instance_ids in arguments if needed
-                if "instance_id" in arguments and "instance_ids" not in arguments:
-                    arguments["instance_ids"] = arguments.pop("instance_id")
                 result = await aura_manager.pause_instance(**arguments)
                 return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 
             elif name == "resume_instance":
-                # Rename instance_id to instance_ids in arguments if needed
-                if "instance_id" in arguments and "instance_ids" not in arguments:
-                    arguments["instance_ids"] = arguments.pop("instance_id")
                 result = await aura_manager.resume_instance(**arguments)
                 return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 
@@ -794,6 +658,10 @@ async def main(client_id: str, client_secret: str):
                 
             elif name == "get_tenant_details":
                 result = await aura_manager.get_tenant_details(**arguments)
+                return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+                
+            elif name == "delete_instance":
+                result = await aura_manager.delete_instance(**arguments)
                 return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 
             else:
@@ -811,7 +679,7 @@ async def main(client_id: str, client_secret: str):
             write_stream,
             InitializationOptions(
                 server_name="mcp-neo4j-aura-manager",
-                server_version="0.1",
+                server_version="0.1.0",
                 capabilities=server.get_capabilities(
                     notification_options=NotificationOptions(),
                     experimental_capabilities={},

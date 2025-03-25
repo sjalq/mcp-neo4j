@@ -137,13 +137,18 @@ async def test_list_instances(mock_client):
 
 
 @pytest.mark.asyncio
-async def test_get_instance_details_single(mock_client):
+async def test_get_instance_details(mock_client):
     manager = AuraManager("fake-id", "fake-secret")
+    mock_client.get_instance_details = MagicMock(return_value=[
+        MOCK_INSTANCES["data"][0]
+    ])
     manager.client = mock_client
     
-    result = await manager.get_instance_details("instance-1")
-    assert result["id"] == "instance-1"
-    assert result["name"] == "Test Instance 1"
+    result = await manager.get_instance_details(["instance-1"])
+    assert result["count"] == 1
+
+    assert result["instances"][0]["id"] == "instance-1"
+    assert result["instances"][0]["name"] == "Test Instance 1"
 
 
 @pytest.mark.asyncio
@@ -158,10 +163,10 @@ async def test_get_instance_details_multiple(mock_client):
     ])
     
     result = await manager.get_instance_details(["instance-1", "instance-2"])
-    assert "results" in result
+    assert "instances" in result
     assert result["count"] == 2
-    assert result["results"][0]["id"] == "instance-1"
-    assert result["results"][1]["id"] == "instance-2"
+    assert result["instances"][0]["id"] == "instance-1"
+    assert result["instances"][1]["id"] == "instance-2"
 
 
 @pytest.mark.asyncio
@@ -173,6 +178,30 @@ async def test_get_instance_by_name(mock_client):
     mock_client.get_instance_by_name = MagicMock(return_value=MOCK_INSTANCES["data"][0])
     
     result = await manager.get_instance_by_name("Test Instance 1")
+    assert result["id"] == "instance-1"
+    assert result["name"] == "Test Instance 1"
+
+@pytest.mark.asyncio
+async def test_get_instance_by_name_substring(mock_client):
+    manager = AuraManager("fake-id", "fake-secret")
+    manager.client = mock_client
+    
+    # Mock the get_instance_by_name method
+    mock_client.get_instance_by_name = MagicMock(return_value=MOCK_INSTANCES["data"][0])
+    
+    result = await manager.get_instance_by_name("Instance 1")
+    assert result["id"] == "instance-1"
+    assert result["name"] == "Test Instance 1"
+
+@pytest.mark.asyncio
+async def test_get_instance_by_name_lower(mock_client):
+    manager = AuraManager("fake-id", "fake-secret")
+    manager.client = mock_client
+    
+    # Mock the get_instance_by_name method
+    mock_client.get_instance_by_name = MagicMock(return_value=MOCK_INSTANCES["data"][0])
+    
+    result = await manager.get_instance_by_name("test instance")
     assert result["id"] == "instance-1"
     assert result["name"] == "Test Instance 1"
 
@@ -196,7 +225,7 @@ async def test_error_handling(mock_client):
     # Mock an error
     mock_client.get_instance_details = MagicMock(side_effect=Exception("Test error"))
     
-    result = await manager.get_instance_details("non-existent")
+    result = await manager.get_instance_details(["non-existent"])
     assert "error" in result
     assert "Test error" in result["error"]
 
@@ -214,7 +243,7 @@ async def test_get_tenant_details(mock_client):
 
 
 @pytest.mark.asyncio
-async def test_pause_instance_single(mock_client):
+async def test_pause_instance(mock_client):
     manager = AuraManager("fake-id", "fake-secret")
     manager.client = mock_client
     
@@ -224,27 +253,8 @@ async def test_pause_instance_single(mock_client):
     result = await manager.pause_instance("instance-1")
     assert result["status"] == "paused"
 
-
 @pytest.mark.asyncio
-async def test_pause_instance_multiple(mock_client):
-    manager = AuraManager("fake-id", "fake-secret")
-    manager.client = mock_client
-    
-    # Mock the pause_instance method to return a list
-    mock_client.pause_instance = MagicMock(return_value=[
-        {"status": "paused", "id": "instance-1"},
-        {"status": "paused", "id": "instance-2"}
-    ])
-    
-    result = await manager.pause_instance(["instance-1", "instance-2"])
-    assert "results" in result
-    assert result["count"] == 2
-    assert result["results"][0]["status"] == "paused"
-    assert result["results"][1]["status"] == "paused"
-
-
-@pytest.mark.asyncio
-async def test_update_instance_name_single(mock_client):
+async def test_update_instance_name(mock_client):
     manager = AuraManager("fake-id", "fake-secret")
     manager.client = mock_client
     
@@ -254,25 +264,6 @@ async def test_update_instance_name_single(mock_client):
     result = await manager.update_instance_name("instance-1", "New Name")
     assert result["name"] == "New Name"
     assert result["id"] == "instance-1"
-
-
-@pytest.mark.asyncio
-async def test_update_instance_name_multiple(mock_client):
-    manager = AuraManager("fake-id", "fake-secret")
-    manager.client = mock_client
-    
-    # Mock the update_instance method to return a list
-    mock_client.update_instance = MagicMock(return_value=[
-        {"name": "New Name", "id": "instance-1"},
-        {"name": "New Name", "id": "instance-2"}
-    ])
-    
-    result = await manager.update_instance_name(["instance-1", "instance-2"], "New Name")
-    assert "results" in result
-    assert result["count"] == 2
-    assert result["results"][0]["name"] == "New Name"
-    assert result["results"][1]["name"] == "New Name"
-
 
 @pytest.mark.asyncio
 async def test_create_instance(mock_client):
@@ -310,4 +301,65 @@ async def test_create_instance(mock_client):
         cloud_provider="gcp",
         graph_analytics_plugin=False,
         source_instance_id=None
-    ) 
+    )
+
+
+@pytest.mark.asyncio
+async def test_delete_instance(mock_client):
+    manager = AuraManager("fake-id", "fake-secret")
+    manager.client = mock_client
+    
+    # Mock the delete_instance method
+    mock_client.delete_instance = MagicMock(return_value={"status": "deleted", "id": "instance-1"})
+    
+    result = await manager.delete_instance(instance_id="instance-1")
+    assert result["id"] == "instance-1"
+    
+    # Verify the mock was called with the correct parameters
+    mock_client.delete_instance.assert_called_once_with(instance_id="instance-1")
+
+
+@pytest.mark.asyncio
+async def test_update_instance_name(mock_client):
+    manager = AuraManager("fake-id", "fake-secret")
+    manager.client = mock_client
+    
+    # Mock the update_instance method
+    mock_client.update_instance = MagicMock(return_value={"name": "New Name", "id": "instance-1"})
+    
+    result = await manager.update_instance_name("instance-1", "New Name")
+    assert result["name"] == "New Name"
+    assert result["id"] == "instance-1"
+    
+    # Verify the mock was called with the correct parameters
+    mock_client.update_instance.assert_called_once_with(instance_id="instance-1", name="New Name")
+
+
+@pytest.mark.asyncio
+async def test_pause_instance(mock_client):
+    manager = AuraManager("fake-id", "fake-secret")
+    manager.client = mock_client
+    
+    # Mock the pause_instance method
+    mock_client.pause_instance = MagicMock(return_value={"status": "paused"})
+    
+    result = await manager.pause_instance("instance-1")
+    assert result["status"] == "paused"
+    
+    # Verify the mock was called with the correct parameters
+    mock_client.pause_instance.assert_called_once_with("instance-1")
+
+
+@pytest.mark.asyncio
+async def test_resume_instance(mock_client):
+    manager = AuraManager("fake-id", "fake-secret")
+    manager.client = mock_client
+    
+    # Mock the resume_instance method
+    mock_client.resume_instance = MagicMock(return_value={"status": "running"})
+    
+    result = await manager.resume_instance("instance-1")
+    assert result["status"] == "running"
+    
+    # Verify the mock was called with the correct parameters
+    mock_client.resume_instance.assert_called_once_with("instance-1")

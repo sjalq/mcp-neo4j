@@ -3,6 +3,7 @@ import pytest
 import logging
 from mcp_neo4j_aura_manager.server import AuraAPIClient
 import uuid
+import time
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -13,6 +14,26 @@ pytestmark = pytest.mark.skipif(
     not os.environ.get("NEO4J_AURA_CLIENT_ID") or not os.environ.get("NEO4J_AURA_CLIENT_SECRET"),
     reason="NEO4J_AURA_CLIENT_ID and NEO4J_AURA_CLIENT_SECRET environment variables are required for integration tests"
 )
+
+def wait_for_instance_status(aura_client, instance_id, status="running"):
+    max_wait_time = 500  # Maximum wait time in seconds
+    wait_interval = 10  # Check every 3 seconds
+    start_time = time.time()
+    
+    time.sleep(wait_interval)
+
+    instance_details = None
+    while time.time() - start_time < max_wait_time:
+        instance_details = aura_client.get_instance_details([instance_id])[0]
+        assert instance_details["id"] == instance_id
+        
+        if instance_details["status"] == status:
+            print(f"Instance {instance_id} is now in {status} state")
+            return instance_details
+            
+        time.sleep(wait_interval)
+    
+    return instance_details
 
 @pytest.fixture
 def aura_client():
@@ -81,7 +102,7 @@ def test_integration_flow(aura_client, test_type):
             assert "name" in instance
             assert "cloud_provider" in instance
             assert "created_at" in instance
-            instance_details = aura_client.get_instance_details(instance["id"])
+            instance_details = aura_client.get_instance_details([instance["id"]])[0]
             print(instance_details)
             assert "id" in instance_details
             assert "name" in instance_details
@@ -111,10 +132,10 @@ def test_integration_flow(aura_client, test_type):
             instance = aura_client.create_instance(
                 tenant_id=tenant_id,
                 name=test_instance_name,
-                memory=4,  # Minimum size
+                memory=1,  # Minimum size
                 region="us-central1",  # Use a common region
                 version="5",  # Use a current version
-                type="free-db",
+                type="professional-db",
                 vector_optimized=False
             )
             
@@ -126,27 +147,30 @@ def test_integration_flow(aura_client, test_type):
             updated = aura_client.update_instance(instance_id=instance_id, name=updated_name)
             assert updated["name"] == updated_name
             
+            instance_details = aura_client.get_instance_details([instance_id])[0]
+            assert instance_details["name"] == updated_name
             # Pause the instance
             paused = aura_client.pause_instance(instance_id)
             assert paused["status"] in ["paused", "pausing"]
             
+            instance_details = wait_for_instance_status(aura_client, instance_id,"paused")
+            assert instance_details["status"] == "paused"
+
             # Resume the instance
             resumed = aura_client.resume_instance(instance_id)
             assert resumed["status"] in ["running", "starting"]
-            
-            # TODO: Add code to delete the instance when done
-            # This requires implementing a delete_instance method
-            # which is not in the current API implementation
-            
-            logger.warning(
-                "Test instance '%s' (ID: %s) was created but not deleted. "
-                "Please delete it manually to avoid unnecessary charges.",
-                test_instance_name, instance_id
-            )
+
+            instance_details = wait_for_instance_status(aura_client, instance_id,"running")
+            assert instance_details["status"] == "running"
             
         except Exception as e:
             logger.error(f"Error during instance creation test: {str(e)}")
             raise 
+        finally:
+            delete_result = aura_client.delete_instance(instance_id)
+            instance_details = aura_client.get_instance_details([instance_id])[0]
+            assert "status" in instance_details
+            print(f"Deleted test instance {instance_id}: {delete_result} {instance_details}")
 
 def test_get_instance_details_multiple(aura_client):
     """Test getting details for multiple instances from the real API."""
@@ -165,30 +189,10 @@ def test_get_instance_details_multiple(aura_client):
     for i, detail in enumerate(details):
         assert detail["id"] == instance_ids[i]
 
-@pytest.mark.parametrize("test_type", ["read_only"])
-def test_integration_flow_multiple(aura_client, test_type):
-    """Test operations on multiple instances."""
-    # First, list all instances
-    instances = aura_client.list_instances()
-    
-    # Skip if there aren't at least 2 instances
-    if len(instances) < 2:
-        pytest.skip("Need at least 2 instances for this test")
-    
-    instance_ids = [instances[0]["id"], instances[1]["id"]]
-    
-    # Get details for multiple instances
-    instance_details = aura_client.get_instance_details(instance_ids)
-    assert isinstance(instance_details, list)
-    assert len(instance_details) == 2
-    
-    # If we're only doing read operations, we're done
-    if test_type == "read_only":
-        return 
 
 @pytest.mark.parametrize("test_type", ["create_instance"])
-def test_create_instance_integration(aura_client, test_type):
-    """Test creating an instance with the real API."""
+def test_create_and_delete_instance_integration(aura_client, test_type):
+    """Test creating and then deleting an instance with the real API."""
     # Skip if not running the create_instance test
     if test_type != "create_instance":
         pytest.skip("Skipping instance creation test")
@@ -198,40 +202,49 @@ def test_create_instance_integration(aura_client, test_type):
     assert len(tenants) > 0
     tenant_id = get_test_tenant(tenants)
     
-    name = f"Test Instance {uuid.uuid4().hex[:8]}"
     # Create a test instance
+    instance_name = f"Test Instance {uuid.uuid4().hex[:8]}"
     instance = aura_client.create_instance(
         tenant_id=tenant_id,
-        name=name,
+        name=instance_name,
         memory=1,
+        cloud_provider="gcp",
         region="europe-west1",
         type="free-db",
-        version="5",
-        cloud_provider="gcp",
     )
     
-    print(instance)
     assert "id" in instance
-    assert "name" in instance and instance['name']==name
-    assert "cloud_provider" in instance
-    assert "created_at" in instance
+    instance_id = instance["id"]
 
-    instance_details = aura_client.get_instance_details(instance["id"])
-    print(instance_details)
-    assert "id" in instance_details
-    assert "name" in instance_details
-    assert "cloud_provider" in instance_details
-    assert "created_at" in instance_details
-    assert "region" in instance_details
-    assert "status" in instance_details
-    assert "memory" in instance_details
-#            assert "storage" in instance_details
-#            assert "version" in instance_details
-    assert "type" in instance_details
-    assert isinstance(instance_details["vector_optimized"], bool)
-    assert isinstance(instance_details["graph_analytics_plugin"], bool)
+    try:
 
-    
-    # Clean up - delete the instance if possible
-    # Note: This would require implementing a delete_instance method
-    # which isn't shown in the original code 
+        assert "name" in instance
+        assert instance["name"] == instance_name
+
+        instance_details = aura_client.get_instance_details([instance_id])[0]
+
+        assert "id" in instance_details
+        assert "name" in instance_details
+        assert "cloud_provider" in instance_details
+        assert "created_at" in instance_details
+        assert "region" in instance_details
+        assert "status" in instance_details
+        assert "memory" in instance_details
+    #            assert "storage" in instance_details
+    #            assert "version" in instance_details
+        assert "type" in instance_details
+        assert isinstance(instance_details["vector_optimized"], bool)
+        assert isinstance(instance_details["graph_analytics_plugin"], bool)
+
+        instance_details = wait_for_instance_status(aura_client, instance_id, "running")        
+        # Verify the instance reached Running state
+        assert instance_details is not None
+        assert instance_details["status"] == "running", "Instance did not reach Running state"
+        
+    finally:
+        # Clean up - delete the instance
+        delete_result = aura_client.delete_instance(instance_id)
+        instance_details = aura_client.get_instance_details([instance_id])[0]
+        assert "status" in instance_details
+        print(f"Deleted test instance {instance_id}: {delete_result} {instance_details}")
+

@@ -29,10 +29,10 @@ The server offers these core tools:
   - Returns: List of all instances with their details
 
 - `get_instance_details`
-  - Get details for a specific instance by ID
+  - Get details for a specific instance or multiple instances by ID
   - Input:
-    - `instance_id` (string): ID of the instance to retrieve
-  - Returns: Detailed information about the instance
+    - `instance_ids` (string or array): ID of the instance to retrieve, or array of instance IDs
+  - Returns: Detailed information about the instance(s)
 
 - `get_instance_by_name`
   - Find an instance by name
@@ -43,6 +43,7 @@ The server offers these core tools:
 - `create_instance`
   - Create a new Neo4j Aura database instance
   - Input:
+    - `tenant_id` (string): ID of the tenant/project where the instance will be created
     - `name` (string): Name for the new instance
     - `memory` (integer): Memory allocation in GB
     - `region` (string): Region for the instance (e.g., 'us-east-1')
@@ -51,40 +52,45 @@ The server offers these core tools:
     - `vector_optimized` (boolean, optional): Whether the instance is optimized for vector operations
   - Returns: Created instance details
 
-#### Instance Configuration
 - `update_instance_name`
-  - Update an instance's name
+  - Update the name of an instance
   - Input:
     - `instance_id` (string): ID of the instance to update
     - `name` (string): New name for the instance
   - Returns: Updated instance details
 
 - `update_instance_memory`
-  - Update an instance's memory allocation
+  - Update the memory allocation of an instance
   - Input:
     - `instance_id` (string): ID of the instance to update
     - `memory` (integer): New memory allocation in GB
   - Returns: Updated instance details
 
 - `update_instance_vector_optimization`
-  - Update an instance's vector optimization setting
+  - Update the vector optimization setting of an instance
   - Input:
     - `instance_id` (string): ID of the instance to update
     - `vector_optimized` (boolean): Whether the instance should be optimized for vector operations
   - Returns: Updated instance details
 
-#### Instance Operations
 - `pause_instance`
   - Pause a database instance
   - Input:
     - `instance_id` (string): ID of the instance to pause
-  - Returns: Operation result
+  - Returns: Instance status information
 
 - `resume_instance`
   - Resume a paused database instance
   - Input:
     - `instance_id` (string): ID of the instance to resume
-  - Returns: Operation result
+  - Returns: Instance status information
+
+- `delete_instance`
+  - Delete a database instance
+  - Input:
+    - `tenant_id` (string): ID of the tenant/project where the instance exists
+    - `instance_id` (string): ID of the instance to delete
+  - Returns: Deletion status information
 
 #### Tenant/Project Management
 - `list_tenants`
@@ -112,16 +118,16 @@ Add the server to your `claude_desktop_config.json`:
 
 ```json
 "mcpServers": {
-"neo4j-aura": {
-"command": "uvx",
-"args": [
-"mcp-neo4j-aura-manager",
-"--client-id",
-"<your-client-id>",
-"--client-secret",
-"<your-client-secret>"
-]
-}
+  "neo4j-aura": {
+    "command": "uvx",
+    "args": [
+      "mcp-neo4j-aura-manager",
+      "--client-id",
+      "<your-client-id>",
+      "--client-secret",
+      "<your-client-secret>"
+      ]
+  }
 }
 ```
 
@@ -129,16 +135,14 @@ Alternatively, you can set environment variables:
 
 ```json
 "mcpServers": {
-"neo4j-aura": {
-"command": "uvx",
-"args": [
-"mcp-neo4j-aura-manager"
-],
-"env": {
-"NEO4J_AURA_CLIENT_ID": "<your-client-id>",
-"NEO4J_AURA_CLIENT_SECRET": "<your-client-secret>"
-}
-}
+  "neo4j-aura": {
+    "command": "uvx",
+    "args": [ "mcp-neo4j-aura-manager" ],
+    "env": {
+      "NEO4J_AURA_CLIENT_ID": "<your-client-id>",
+      "NEO4J_AURA_CLIENT_SECRET": "<your-client-secret>"
+    }
+  }
 }
 ```
 ### Development
@@ -149,19 +153,39 @@ For development, you can run the server directly:
 "mcpServers": {
   "neo4j-aura": {
     "command": "uv",
-    "args": [
-      "--directory",
-      "path/to/repo/src/mcp_neo4j_aura_manager",
-      "run",
-      "mcp-neo4j-aura-manager",
-      "--client-id",
-      "<your-client-id>",
-      "--client-secret",
-      "<your-client-secret>"
-    ]
+      "args": [
+        "--directory",
+        "path/to/repo/src/mcp_neo4j_aura_manager",
+        "run",
+        "mcp-neo4j-aura-manager",
+        "--client-id",
+        "<your-client-id>",
+        "--client-secret",
+        "<your-client-secret>"
+      ]
     }
 }
 ```
+## Usage Examples
+
+### Give overview over my tenants
+
+![](docs/images/mcp-aura-tenant-overview.png)
+
+### Find an instance by name
+
+![](docs/images/mcp-aura-find-by-name.png)
+
+### List instances and find paused instance
+![](docs/images/mcp-aura-find-paused.png)
+
+### Resume paused instances
+![](docs/images/mcp-aura-list-resume.png)
+
+### Create a new instance
+
+![](docs/images/mcp-aura-create-instance.png)
+
 ## License
 
 This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
