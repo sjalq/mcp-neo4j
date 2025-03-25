@@ -52,5 +52,5 @@ jobs:
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          cd serversmcp-neo4j-cloud-aura-api/
+          cd servers/mcp-neo4j-cloud-aura-api/
           uv publish
