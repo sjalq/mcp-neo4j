@@ -406,13 +406,11 @@ async def main(client_id: str, client_secret: str):
                     "type": "object",
                     "properties": {
                         "instance_ids": {
-                            {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                },
-                                "description": "List of instance IDs to retrieve"
-                            }
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "List of instance IDs to retrieve"
                         }
                     },
                     "required": ["instance_ids"],
@@ -594,16 +592,12 @@ async def main(client_id: str, client_secret: str):
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "tenant_id": {
-                            "type": "string",
-                            "description": "ID of the tenant/project where the instance exists"
-                        },
                         "instance_id": {
                             "type": "string",
                             "description": "ID of the instance to delete"
                         }
                     },
-                    "required": ["tenant_id", "instance_id"],
+                    "required": ["instance_id"],
                 },
             ),
         ]
