@@ -394,6 +394,12 @@ async def main(client_id: str, client_secret: str):
             types.Tool(
                 name="list_instances",
                 description="List all Neo4j Aura database instances",
+                annotations={
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "readOnlyHint": True,
+                    "title": "List all Neo4j Aura database instances"
+                },
                 inputSchema={
                     "type": "object",
                     "properties": {},
@@ -402,6 +408,12 @@ async def main(client_id: str, client_secret: str):
             types.Tool(
                 name="get_instance_details",
                 description="Get details for one or more Neo4j Aura instances by ID, including status, region, memory, storage",
+                annotations={
+                    "destructiveHint": False, 
+                    "idempotentHint": True,
+                    "readOnlyHint": True,
+                    "title": "Get instance details"
+                },
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -419,6 +431,12 @@ async def main(client_id: str, client_secret: str):
             types.Tool(
                 name="get_instance_by_name",
                 description="Find a Neo4j Aura instance by name and returns the details including the id",
+                annotations={
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "readOnlyHint": True,
+                    "title": "Find instance by name"
+                },
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -433,6 +451,12 @@ async def main(client_id: str, client_secret: str):
             types.Tool(
                 name="create_instance",
                 description="Create a new Neo4j Aura database instance",
+                annotations={
+                    "destructiveHint": False,
+                    "idempotentHint": False,
+                    "readOnlyHint": False,
+                    "title": "Create instance"
+                },
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -485,6 +509,12 @@ async def main(client_id: str, client_secret: str):
             types.Tool(
                 name="update_instance_name",
                 description="Update the name of a Neo4j Aura instance",
+                annotations={
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "readOnlyHint": False,
+                    "title": "Update instance name"
+                },
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -503,6 +533,12 @@ async def main(client_id: str, client_secret: str):
             types.Tool(
                 name="update_instance_memory",
                 description="Update the memory allocation of a Neo4j Aura instance",
+                annotations={
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "readOnlyHint": False,
+                    "title": "Update instance memory"
+                },
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -521,6 +557,12 @@ async def main(client_id: str, client_secret: str):
             types.Tool(
                 name="update_instance_vector_optimization",
                 description="Update the vector optimization setting of a Neo4j Aura instance",
+                annotations={
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "readOnlyHint": False,
+                    "title": "Update instance vector optimization"
+                },
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -539,6 +581,12 @@ async def main(client_id: str, client_secret: str):
             types.Tool(
                 name="pause_instance",
                 description="Pause a Neo4j Aura database instance",
+                annotations={
+                    "destructiveHint": False,
+                    "idempotentHint": False,
+                    "readOnlyHint": False,
+                    "title": "Pause instance"
+                },
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -553,6 +601,12 @@ async def main(client_id: str, client_secret: str):
             types.Tool(
                 name="resume_instance",
                 description="Resume a paused Neo4j Aura database instance",
+                annotations={
+                    "destructiveHint": False,
+                    "idempotentHint": False,
+                    "readOnlyHint": False,
+                    "title": "Resume instance"
+                },
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -567,6 +621,12 @@ async def main(client_id: str, client_secret: str):
             types.Tool(
                 name="list_tenants",
                 description="List all Neo4j Aura tenants/projects",
+                annotations={
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "readOnlyHint": True,
+                    "title": "List tenants"
+                },
                 inputSchema={
                     "type": "object",
                     "properties": {},
@@ -575,6 +635,12 @@ async def main(client_id: str, client_secret: str):
             types.Tool(
                 name="get_tenant_details",
                 description="Get details for a specific Neo4j Aura tenant/project",
+                annotations={
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "readOnlyHint": True,
+                    "title": "Get tenant details"
+                },
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -589,6 +655,12 @@ async def main(client_id: str, client_secret: str):
             types.Tool(
                 name="delete_instance",
                 description="Delete a Neo4j Aura database instance",
+                annotations={
+                    "destructiveHint": True,
+                    "idempotentHint": False,
+                    "readOnlyHint": False,
+                    "title": "Delete instance"
+                },
                 inputSchema={
                     "type": "object",
                     "properties": {
