@@ -43,6 +43,11 @@ class neo4jDatabase:
             logger.error(f"Database error executing query: {e}\n{query}")
             raise
 
+    def close(self) -> None:
+        "Close the Neo4j Driver"
+        self.driver.close()
+
+
 async def main(neo4j_url: str, neo4j_username: str, neo4j_password: str):
     logger.info(f"Connecting to neo4j MCP Server with DB URL: {neo4j_url}")
 
@@ -59,6 +64,12 @@ async def main(neo4j_url: str, neo4j_username: str, neo4j_password: str):
             types.Tool(
                 name="read-neo4j-cypher",
                 description="Execute a Cypher query on the neo4j database",
+                annotations={
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "readOnlyHint": True,
+                    "title": "Read from Neo4j Database"
+                },
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -70,6 +81,12 @@ async def main(neo4j_url: str, neo4j_username: str, neo4j_password: str):
             types.Tool(
                 name="write-neo4j-cypher",
                 description="Execute a write Cypher query on the neo4j database",
+                annotations={
+                    "destructiveHint": True,
+                    "idempotentHint": False,
+                    "readOnlyHint": False,
+                    "title": "Update Neo4j Database"
+                },
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -81,6 +98,12 @@ async def main(neo4j_url: str, neo4j_username: str, neo4j_password: str):
             types.Tool(
                 name="get-neo4j-schema",
                 description="List all node types, their attributes and their relationships TO other node-types in the neo4j database",
+                annotations={
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "readOnlyHint": True,
+                    "title": "Get Neo4j Database Schema"
+                },
                 inputSchema={
                     "type": "object",
                     "properties": {},
