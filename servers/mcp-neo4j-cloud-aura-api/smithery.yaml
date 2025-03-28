@@ -1,0 +1,29 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+build:
+  dockerBuildPath: ../..
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - clientId
+      - clientSecret
+    properties:
+      clientId:
+        type: string
+        description: Neo4j Aura API Client ID
+      clientSecret:
+        type: string
+        description: Neo4j Aura API Client Secret
+  exampleConfig:
+    clientId: dummy-client-id
+    clientSecret: dummy-client-secret
+  commandFunction:
+    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
+    |-
+    (config) => ({
+      command: 'mcp-neo4j-aura-manager',
+      args: ['--client-id', config.clientId, '--client-secret', config.clientSecret]
+    })
