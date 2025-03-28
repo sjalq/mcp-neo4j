@@ -125,7 +125,7 @@ def test_integration_flow(aura_client, test_type):
     # Only run this if explicitly enabled and you understand the implications
     if test_type == "create_instance" and os.environ.get("ENABLE_INSTANCE_CREATION") == "true":
         # Create a test instance
-        test_instance_name = f"pytest-integration-{os.urandom(4).hex()}"
+        test_instance_name = f"Pro Test Instance {uuid.uuid4().hex[:8]}"
         
         try:
             # Create a small instance for testing
@@ -143,26 +143,40 @@ def test_integration_flow(aura_client, test_type):
             assert instance["name"] == test_instance_name
             
             # Update the instance name
-            updated_name = f"{test_instance_name}-updated"
+            print("Updating instance name")
+            updated_name = f"{test_instance_name}-U"
             updated = aura_client.update_instance(instance_id=instance_id, name=updated_name)
             assert updated["name"] == updated_name
             
+            print("Getting instance details")
             instance_details = aura_client.get_instance_details([instance_id])[0]
             assert instance_details["name"] == updated_name
+            
+            instance_details = wait_for_instance_status(aura_client, instance_id,"running")
+            assert instance_details["status"] == "running"
+
             # Pause the instance
+            print("Pausing instance")
             paused = aura_client.pause_instance(instance_id)
             assert paused["status"] in ["paused", "pausing"]
             
+            print("Waiting for instance to be paused")
             instance_details = wait_for_instance_status(aura_client, instance_id,"paused")
             assert instance_details["status"] == "paused"
 
-            # Resume the instance
+            print("Resuming instance")
             resumed = aura_client.resume_instance(instance_id)
-            assert resumed["status"] in ["running", "starting"]
+            assert resumed["status"] in ["resuming", "running"]
 
+            print("Waiting for instance to be running")
             instance_details = wait_for_instance_status(aura_client, instance_id,"running")
             assert instance_details["status"] == "running"
-            
+
+            print("Updating instance memory")
+            updated = aura_client.update_instance(instance_id=instance_id, memory=2)
+            instance_details = wait_for_instance_status(aura_client, instance_id,"running")
+            assert instance_details["memory"] == "2GB"
+
         except Exception as e:
             logger.error(f"Error during instance creation test: {str(e)}")
             raise 
