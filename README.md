@@ -37,6 +37,12 @@ Create and destroy instances, find instances by name, scale them up and down and
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+## Blog Posts
+
+* [Everything a Developer Needs to Know About the Model Context Protocol (MCP)](https://neo4j.com/blog/developer/model-context-protocol/)
+* [Claude Converses With Neo4j Via MCP - Graph Database & Analytics](https://neo4j.com/blog/developer/claude-converses-neo4j-via-mcp/)
+* [Building Knowledge Graphs With Claude and Neo4j: A No-Code MCP Approach - Graph Database & Analytics](https://neo4j.com/blog/developer/knowledge-graphs-claude-neo4j-mcp/)
+
 ## License
 
 MIT License
