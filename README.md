@@ -20,7 +20,7 @@ Get database schema for a configured database and exeucte generated read and wri
 
 ### `mcp-neo4j-memory` - knowledge graph memory stored in Neo4j
 
-[Details in Readme](./servers/mcp-neo4j-cypher/)
+[Details in Readme](./servers/mcp-neo4j-memory/)
 
 Store and retrieve entities and relationships from your personal knowledge graph in a local or remote Neo4j instance.
 Access that information over different sessions, conversations, clients.
