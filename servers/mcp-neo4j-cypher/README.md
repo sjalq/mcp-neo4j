@@ -41,12 +41,52 @@ Add the server to your `claude_desktop_config.json` with configuration of:
 * username
 * password
 
+
+Alternatively, you can set environment variables:
+
+```json
+"mcpServers": {
+  "neo4j-aura": {
+    "command": "uvx",
+    "args": [ "mcp-neo4j-cypher==0.1.2" ],
+    "env": {
+      "NEO4J_URL": "bolt://localhost:7687",
+      "NEO4J_USERNAME": "neo4j",
+      "NEO4J_PASSWORD": "<your-password>"
+    }
+  }
+}
+```
+
+Here is an example connection for the movie database with Movie, Person (Actor, Director), Genre, User and ratings:
+
+```json
+{
+  "mcpServers": {
+    "movies-neo4j": {
+      "command": "uvx",
+      "args": ["mcp-neo4j-cypher==0.1.2"],
+          "env": {
+      "NEO4J_URL": "neo4j+s://demo.neo4jlabs.com",
+      "NEO4J_USERNAME": "recommendations",
+      "NEO4J_PASSWORD": "recommendations"
+    }
+    }   
+  }
+}
+```
+
+Syntax with `--db-url`, `--username` and `--password` was supported but will be removed in future versions:
+
+<details>
+  <summary>Legacy Syntax</summary>
+
 ```json
 "mcpServers": {
   "neo4j": {
     "command": "uvx",
     "args": [
-      "mcp-neo4j-cypher",
+      "mcp-neo4j-cypher==0.1.2",
       "--db-url",
       "bolt://localhost",
       "--username",
@@ -65,7 +105,7 @@ Here is an example connection for the movie database with Movie, Person (Actor, 
   "mcpServers": {
     "movies-neo4j": {
       "command": "uvx",
-      "args": ["mcp-neo4j-cypher", 
+      "args": ["mcp-neo4j-cypher==0.1.2", 
       "--db-url", "neo4j+s://demo.neo4jlabs.com", 
       "--user", "recommendations", 
       "--password", "recommendations"]
@@ -73,6 +113,7 @@ Here is an example connection for the movie database with Movie, Person (Actor, 
   }
 }
 ```
+</details>
 
 ### 🐳 Using with Docker
 
@@ -86,7 +127,7 @@ Here is an example connection for the movie database with Movie, Person (Actor, 
       "-e", "NEO4J_URL=bolt://host.docker.internal:7687",
       "-e", "NEO4J_USERNAME=neo4j",
       "-e", "NEO4J_PASSWORD=<your-password>",
-      "mcp/neo4j-cypher:0.1.1"
+      "mcp/neo4j-cypher:0.1.2"
     ]
   }
 }
@@ -131,17 +172,13 @@ uv pip install -e ".[dev]"
   "neo4j": {
     "command": "uv",
     "args": [
-      "--directory",
-      "parent_of_servers_repo/servers/src/neo4j",
-      "run",
-      "mcp-neo4j-cypher",
-      "--db-url",
-      "bolt://localhost",
-      "--username",
-      "neo4j",
-      "--password",
-      "<your-password>"
-    ]
+      "--directory", "parent_of_servers_repo/servers/src/neo4j",
+      "run", "mcp-neo4j-cypher"],
+    "env": {
+      "NEO4J_URL": "bolt://localhost",
+      "NEO4J_USERNAME": "neo4j",
+      "NEO4J_PASSWORD": "<your-password>"
+    }
   }
 }
 ```
@@ -152,13 +189,13 @@ Build and run the Docker container:
 
 ```bash
 # Build the image
-docker build -t mcp/neo4j-cypher:0.1.1 .
+docker build -t mcp/neo4j-cypher:latest .
 
 # Run the container
 docker run -e NEO4J_URL="bolt://host.docker.internal:7687" \
           -e NEO4J_USERNAME="neo4j" \
           -e NEO4J_PASSWORD="your-password" \
-          mcp/neo4j-cypher:0.1.1
+          mcp/neo4j-cypher:latest
 ```
 
 ## 📄 License
