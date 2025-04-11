@@ -1,21 +1,16 @@
-# Neo4j MCP Server
+# 🔍⁉️ Neo4j MCP Server
 
-## Overview
-A Model Context Protocol (MCP) server implementation that provides database interaction and allows graph exploration capabilities through neo4j. This server enables running Cypher graph queries, analyzing complex domain data, and automatically generating business insights that can be enhanced with Claude's analysis when an Anthropic API key is provided.
+## 🌟 Overview
 
-## Components
+A Model Context Protocol (MCP) server implementation that provides database interaction and allows graph exploration capabilities through Neo4j. This server enables running Cypher graph queries, analyzing complex domain data, and automatically generating business insights that can be enhanced with Claude's analysis.
 
-### Resources
+## 🧩 Components
 
-### Prompts
-The server provides a demonstration prompt:
-- `mcp-demo`: Interactive prompt that guides users through database operations
-  - Generates appropriate database schemas and sample data
+### 🛠️ Tools
 
-### Tools
-The server offers six core tools:
+The server offers these core tools:
 
-#### Query Tools
+#### 📊 Query Tools
 - `read-neo4j-cypher`
    - Execute Cypher read queries to read data from the database
    - Input: 
@@ -26,21 +21,21 @@ The server offers six core tools:
    - Execute updating Cypher queries
    - Input:
      - `query` (string): The Cypher update query
-   - Returns: a result summary counter with `{ nodes_updated: number, relationships_created: number, ... }`
+   - Returns: A result summary counter with `{ nodes_updated: number, relationships_created: number, ... }`
 
-#### Schema Tools
+#### 🕸️ Schema Tools
 - `get-neo4j-schema`
    - Get a list of all nodes types in the graph database, their attributes with name, type and relationships to other node types
    - No input required
    - Returns: List of node label with two dictionaries one for attributes and one for relationships
 
-## Usage with Claude Desktop
+## 🔧 Usage with Claude Desktop
 
-### Released Package
+### 💾 Released Package
 
 Can be found on PyPi https://pypi.org/project/mcp-neo4j-cypher/
 
-Add the server to your `claude_desktop_config.json` with configuration of 
+Add the server to your `claude_desktop_config.json` with configuration of:
 
 * db-url
 * username
@@ -63,7 +58,7 @@ Add the server to your `claude_desktop_config.json` with configuration of
 }
 ```
 
-Here is an example connection for the movie database with Movie, Person (Actor, Director), Genre, User and ratings.
+Here is an example connection for the movie database with Movie, Person (Actor, Director), Genre, User and ratings:
 
 ```json
 {
@@ -79,7 +74,56 @@ Here is an example connection for the movie database with Movie, Person (Actor, 
 }
 ```
 
-### Development
+### 🐳 Using with Docker
+
+```json
+"mcpServers": {
+  "neo4j": {
+    "command": "docker",
+    "args": [
+      "run",
+      "--rm",
+      "-e", "NEO4J_URL=bolt://host.docker.internal:7687",
+      "-e", "NEO4J_USERNAME=neo4j",
+      "-e", "NEO4J_PASSWORD=<your-password>",
+      "mcp/neo4j-cypher:0.1.1"
+    ]
+  }
+}
+```
+
+## 🚀 Development
+
+### 📦 Prerequisites
+
+1. Install `uv` (Universal Virtualenv):
+```bash
+# Using pip
+pip install uv
+
+# Using Homebrew on macOS
+brew install uv
+
+# Using cargo (Rust package manager)
+cargo install uv
+```
+
+2. Clone the repository and set up development environment:
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/mcp-neo4j-cypher.git
+cd mcp-neo4j-cypher
+
+# Create and activate virtual environment using uv
+uv venv
+source .venv/bin/activate  # On Unix/macOS
+.venv\Scripts\activate     # On Windows
+
+# Install dependencies including dev dependencies
+uv pip install -e ".[dev]"
+```
+
+### 🔧 Development Configuration
 
 ```json
 # Add the server to your claude_desktop_config.json
@@ -102,6 +146,21 @@ Here is an example connection for the movie database with Movie, Person (Actor, 
 }
 ```
 
-## License
+### 🐳 Docker
+
+Build and run the Docker container:
+
+```bash
+# Build the image
+docker build -t mcp/neo4j-cypher:0.1.1 .
+
+# Run the container
+docker run -e NEO4J_URL="bolt://host.docker.internal:7687" \
+          -e NEO4J_USERNAME="neo4j" \
+          -e NEO4J_PASSWORD="your-password" \
+          mcp/neo4j-cypher:0.1.1
+```
+
+## 📄 License
 
 This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
