@@ -5,28 +5,36 @@ from contextlib import closing
 from pathlib import Path
 from mcp.server.models import InitializationOptions
 import mcp.types as types
-from mcp.server import NotificationOptions, Server
-import mcp.server.stdio
+from mcp.server import NotificationOptions
+from mcp.server.lowlevel import Server
 from pydantic import AnyUrl
 from typing import Any
 from neo4j import GraphDatabase
 import re
+from mcp.server.stdio import stdio_server
 
-logger = logging.getLogger('mcp_neo4j_cypher')
+logger = logging.getLogger("mcp_neo4j_cypher")
 logger.info("Starting MCP neo4j Server")
 
+
 def is_write_query(query: str) -> bool:
-    return re.search(r"\b(MERGE|CREATE|SET|DELETE|REMOVE|ADD)\b", query, re.IGNORECASE) is not None
+    return (
+        re.search(r"\b(MERGE|CREATE|SET|DELETE|REMOVE|ADD)\b", query, re.IGNORECASE)
+        is not None
+    )
+
 
 class neo4jDatabase:
-    def __init__(self,  neo4j_uri: str, neo4j_username: str, neo4j_password: str):
+    def __init__(self, neo4j_uri: str, neo4j_username: str, neo4j_password: str):
         """Initialize connection to the neo4j database"""
         logger.debug(f"Initializing database connection to {neo4j_uri}")
         d = GraphDatabase.driver(neo4j_uri, auth=(neo4j_username, neo4j_password))
         d.verify_connectivity()
         self.driver = d
 
-    def _execute_query(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    def _execute_query(
+        self, query: str, params: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         """Execute a Cypher query and return results as a list of dictionaries"""
         logger.debug(f"Executing query: {query}")
         try:
@@ -68,12 +76,15 @@ async def main(neo4j_url: str, neo4j_username: str, neo4j_password: str):
                     "destructiveHint": False,
                     "idempotentHint": True,
                     "readOnlyHint": True,
-                    "title": "Read from Neo4j Database"
+                    "title": "Read from Neo4j Database",
                 },
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "Cypher read query to execute"},
+                        "query": {
+                            "type": "string",
+                            "description": "Cypher read query to execute",
+                        },
                     },
                     "required": ["query"],
                 },
@@ -85,12 +96,15 @@ async def main(neo4j_url: str, neo4j_username: str, neo4j_password: str):
                     "destructiveHint": True,
                     "idempotentHint": False,
                     "readOnlyHint": False,
-                    "title": "Update Neo4j Database"
+                    "title": "Update Neo4j Database",
                 },
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "Cypher write query to execute"},
+                        "query": {
+                            "type": "string",
+                            "description": "Cypher write query to execute",
+                        },
                     },
                     "required": ["query"],
                 },
@@ -102,13 +116,13 @@ async def main(neo4j_url: str, neo4j_username: str, neo4j_password: str):
                     "destructiveHint": False,
                     "idempotentHint": True,
                     "readOnlyHint": True,
-                    "title": "Get Neo4j Database Schema"
+                    "title": "Get Neo4j Database Schema",
                 },
                 inputSchema={
                     "type": "object",
                     "properties": {},
                 },
-            )
+            ),
         ]
 
     @server.call_tool()
@@ -141,14 +155,14 @@ RETURN label, apoc.map.fromPairs(attributes) as attributes, apoc.map.fromPairs(r
                     raise ValueError("Only write queries are allowed for write-query")
                 results = db._execute_query(arguments["query"])
                 return [types.TextContent(type="text", text=str(results))]
-            
+
             else:
                 raise ValueError(f"Unknown tool: {name}")
 
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error: {str(e)}")]
 
-    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+    async with stdio_server() as (read_stream, write_stream):
         logger.info("Server running with stdio transport")
         await server.run(
             read_stream,
