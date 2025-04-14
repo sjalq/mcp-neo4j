@@ -172,7 +172,7 @@ uv pip install -e ".[dev]"
   "neo4j": {
     "command": "uv",
     "args": [
-      "--directory", "parent_of_servers_repo/servers/src/neo4j",
+      "--directory", "parent_of_servers_repo/servers/mcp-neo4j-cypher/src",
       "run", "mcp-neo4j-cypher"],
     "env": {
       "NEO4J_URL": "bolt://localhost",
