@@ -1,0 +1,18 @@
+## Next
+
+### Fixed
+
+### Changed
+
+* Refactor mcp-neo4j-cypher to use the FastMCP class
+* Implement Neo4j async driver
+* Tool responses now return JSON serialized results
+
+### Added
+
+* Add support for environment variables
+
+
+## v0.1.1
+
+...
