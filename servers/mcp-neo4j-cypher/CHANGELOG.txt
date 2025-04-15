@@ -9,6 +9,7 @@
 * Tool responses now return JSON serialized results
 * Removed old integration tests. Testing now done with Inspector and Claude Desktop.
 * Update README with new config options 
+* Update integration tests
 
 ### Added
 

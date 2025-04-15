@@ -8,6 +8,7 @@ from neo4j import (
     AsyncResult,
     AsyncTransaction,
     GraphDatabase,
+    AsyncDriver,
 )
 from neo4j.exceptions import DatabaseError
 import time
@@ -15,6 +16,8 @@ import re
 from typing import Optional
 import sys
 import json
+
+logger = logging.getLogger("mcp_neo4j_cypher")
 
 
 def healthcheck(db_url: str, username: str, password: str, database: str) -> None:
@@ -77,26 +80,9 @@ def _is_write_query(query: str) -> bool:
     )
 
 
-def main(
-    db_url: str,
-    username: str,
-    password: str,
-    database: str,
-) -> None:
-    logger = logging.getLogger("mcp_neo4j_cypher")
-    logger.info("Starting MCP neo4j Server")
-
-    neo4j_driver = AsyncGraphDatabase.driver(
-        db_url,
-        auth=(
-            username,
-            password,
-        ),
-    )
-
+def create_mcp_server(neo4j_driver: AsyncDriver, database: str = "neo4j") -> FastMCP:
     mcp: FastMCP = FastMCP("mcp-neo4j-cypher", dependencies=["neo4j", "pydantic"])
 
-    @mcp.tool()
     async def get_neo4j_schema() -> list[types.TextContent]:
         """List all node, their attributes and their relationships to other nodes in the neo4j database"""
 
@@ -110,9 +96,7 @@ RETURN label, apoc.map.fromPairs(attributes) as attributes, apoc.map.fromPairs(r
 """
 
         try:
-            async with neo4j_driver.session(
-                database=database
-            ) as session:
+            async with neo4j_driver.session(database=database) as session:
                 results_json_str = await session.execute_read(
                     _read, get_schema_query, dict()
                 )
@@ -125,7 +109,6 @@ RETURN label, apoc.map.fromPairs(attributes) as attributes, apoc.map.fromPairs(r
             logger.error(f"Database error retrieving schema: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
 
-    @mcp.tool()
     async def read_neo4j_cypher(
         query: str = Field(..., description="The Cypher query to execute."),
         params: Optional[dict[str, Any]] = Field(
@@ -138,9 +121,7 @@ RETURN label, apoc.map.fromPairs(attributes) as attributes, apoc.map.fromPairs(r
             raise ValueError("Only MATCH queries are allowed for read-query")
 
         try:
-            async with neo4j_driver.session(
-                database=database
-            ) as session:
+            async with neo4j_driver.session(database=database) as session:
                 results_json_str = await session.execute_read(_read, query, params)
 
                 logger.debug(f"Read query returned {len(results_json_str)} rows")
@@ -153,7 +134,6 @@ RETURN label, apoc.map.fromPairs(attributes) as attributes, apoc.map.fromPairs(r
                 types.TextContent(type="text", text=f"Error: {e}\n{query}\n{params}")
             ]
 
-    @mcp.tool()
     async def write_neo4j_cypher(
         query: str = Field(..., description="The Cypher query to execute."),
         params: Optional[dict[str, Any]] = Field(
@@ -166,11 +146,11 @@ RETURN label, apoc.map.fromPairs(attributes) as attributes, apoc.map.fromPairs(r
             raise ValueError("Only write queries are allowed for write-query")
 
         try:
-            async with neo4j_driver.session(
-                database=database
-            ) as session:
+            async with neo4j_driver.session(database=database) as session:
                 raw_results = await session.execute_write(_write, query, params)
-                counters_json_str = json.dumps(raw_results._summary.counters.__dict__, default=str)
+                counters_json_str = json.dumps(
+                    raw_results._summary.counters.__dict__, default=str
+                )
 
             logger.debug(f"Write query affected {counters_json_str}")
 
@@ -182,9 +162,37 @@ RETURN label, apoc.map.fromPairs(attributes) as attributes, apoc.map.fromPairs(r
                 types.TextContent(type="text", text=f"Error: {e}\n{query}\n{params}")
             ]
 
+    mcp.add_tool(get_neo4j_schema)
+    mcp.add_tool(read_neo4j_cypher)
+    mcp.add_tool(write_neo4j_cypher)
+
+    return mcp
+
+
+def main(
+    db_url: str,
+    username: str,
+    password: str,
+    database: str,
+) -> None:
+    logger.info("Starting MCP neo4j Server")
+
+    # create the neo4j driver
+    neo4j_driver = AsyncGraphDatabase.driver(
+        db_url,
+        auth=(
+            username,
+            password,
+        ),
+    )
+
+    # create the MCP server
+    mcp = create_mcp_server(neo4j_driver, database)
+
     # run healthcheck before starting the server
     healthcheck(db_url, username, password, database)
 
+    # run the MCP server
     mcp.run(transport="stdio")
 
 

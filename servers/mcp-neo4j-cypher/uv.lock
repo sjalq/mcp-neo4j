@@ -175,6 +175,7 @@ dependencies = [
     { name = "mcp", extra = ["cli"] },
     { name = "neo4j" },
     { name = "pydantic" },
+    { name = "pytest-asyncio" },
 ]
 
 [package.dev-dependencies]
@@ -189,6 +190,7 @@ requires-dist = [
     { name = "mcp", extras = ["cli"], specifier = ">=1.6.0" },
     { name = "neo4j", specifier = ">=5.26.0" },
     { name = "pydantic", specifier = ">=2.10.1" },
+    { name = "pytest-asyncio", specifier = ">=0.26.0" },
 ]
 
 [package.metadata.requires-dev]
