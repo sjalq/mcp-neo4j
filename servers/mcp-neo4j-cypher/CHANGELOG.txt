@@ -13,6 +13,7 @@
 ### Added
 
 * Add support for environment variables
+* Add Github workflow to test and format mcp-neo4j-cypher
 
 
 ## v0.1.1
