@@ -7,6 +7,8 @@
 * Refactor mcp-neo4j-cypher to use the FastMCP class
 * Implement Neo4j async driver
 * Tool responses now return JSON serialized results
+* Removed old integration tests. Testing now done with Inspector and Claude Desktop.
+* Update README with new config options 
 
 ### Added
 

@@ -12,7 +12,6 @@ from neo4j import (
 from neo4j.exceptions import DatabaseError
 import time
 import re
-import os
 from typing import Optional
 import sys
 import json
@@ -112,7 +111,7 @@ RETURN label, apoc.map.fromPairs(attributes) as attributes, apoc.map.fromPairs(r
 
         try:
             async with neo4j_driver.session(
-                database=os.getenv("NEO4J_DATABASE", "neo4j")
+                database=database
             ) as session:
                 results_json_str = await session.execute_read(
                     _read, get_schema_query, dict()
@@ -140,7 +139,7 @@ RETURN label, apoc.map.fromPairs(attributes) as attributes, apoc.map.fromPairs(r
 
         try:
             async with neo4j_driver.session(
-                database=os.getenv("NEO4J_DATABASE", "neo4j")
+                database=database
             ) as session:
                 results_json_str = await session.execute_read(_read, query, params)
 
@@ -168,7 +167,7 @@ RETURN label, apoc.map.fromPairs(attributes) as attributes, apoc.map.fromPairs(r
 
         try:
             async with neo4j_driver.session(
-                database=os.getenv("NEO4J_DATABASE", "neo4j")
+                database=database
             ) as session:
                 raw_results = await session.execute_write(_write, query, params)
                 counters_json_str = json.dumps(raw_results._summary.counters.__dict__, default=str)
@@ -183,6 +182,7 @@ RETURN label, apoc.map.fromPairs(attributes) as attributes, apoc.map.fromPairs(r
                 types.TextContent(type="text", text=f"Error: {e}\n{query}\n{params}")
             ]
 
+    # run healthcheck before starting the server
     healthcheck(db_url, username, password, database)
 
     mcp.run(transport="stdio")
