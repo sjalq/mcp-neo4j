@@ -31,6 +31,7 @@ jobs:
     - name: Install dependencies
       run: |
         cd servers/mcp-neo4j-cypher
+        uv venv
         uv pip install -e .
     
     - name: Run tests
