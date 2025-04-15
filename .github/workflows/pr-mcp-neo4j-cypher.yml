@@ -37,7 +37,7 @@ jobs:
     - name: Check format and linting
       run: |
         cd servers/mcp-neo4j-cypher
-        uv run ruff check --select I .
+        uv run ruff check --select I . --fix
         uv run ruff check --fix .
         uv run ruff format .
     

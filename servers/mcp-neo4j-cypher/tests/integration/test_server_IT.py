@@ -1,7 +1,8 @@
-from mcp.server import FastMCP
-import pytest
-from typing import Any
 import json
+from typing import Any
+
+import pytest
+from mcp.server import FastMCP
 
 
 @pytest.mark.asyncio(loop_scope="session")
