@@ -1,6 +1,5 @@
-import asyncio
 import time
-from typing import Any, AsyncGenerator, Generator
+from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -47,7 +46,6 @@ def healthcheck(sync_neo4j_driver: Driver):
             success = True
             print("Neo4j is running!")
         except Exception as e:
-            ex = e
             attempts += 1
             print(
                 f"failed connection {attempts} | waiting {(1 + attempts) * 2} seconds..."
