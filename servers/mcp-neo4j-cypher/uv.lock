@@ -57,6 +57,17 @@ wheels = [
 ]
 
 [[package]]
+name = "common"
+version = "0.1.0"
+source = { editable = "../common" }
+dependencies = [
+    { name = "neo4j" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "neo4j", specifier = ">=5.26.1" }]
+
+[[package]]
 name = "exceptiongroup"
 version = "1.2.2"
 source = { registry = "https://pypi.org/simple" }
@@ -172,6 +183,7 @@ name = "mcp-neo4j-cypher"
 version = "0.1.2"
 source = { editable = "." }
 dependencies = [
+    { name = "common" },
     { name = "mcp", extra = ["cli"] },
     { name = "neo4j" },
     { name = "pydantic" },
@@ -187,6 +199,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "common", editable = "../common" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.6.0" },
     { name = "neo4j", specifier = ">=5.26.0" },
     { name = "pydantic", specifier = ">=2.10.1" },
@@ -211,14 +224,14 @@ wheels = [
 
 [[package]]
 name = "neo4j"
-version = "5.26.0"
+version = "5.28.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pytz" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c5/62/7a6d0b90da5fb2a68c61996baeade66ff030b3f1036263e649a50e80e9d0/neo4j-5.26.0.tar.gz", hash = "sha256:51b25ba127b7b9fdae1ddf48ae697ddfab331e60f4b6d8488d1fc1f74ec60dcc", size = 224127 }
+sdist = { url = "https://files.pythonhosted.org/packages/4b/20/733dac16f7cedc80b23093415822c9763302519cba0e7c8bcdb5c01fc512/neo4j-5.28.1.tar.gz", hash = "sha256:ae8e37a1d895099062c75bc359b2cce62099baac7be768d0eba7180c1298e214", size = 231094 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/58/a8/e8bafaaf3a2fa2391c8c86ab4e8dec2aff3f2fd35b773476580ccca26e4c/neo4j-5.26.0-py3-none-any.whl", hash = "sha256:511a6a9468ca89b521bf686f885a2070acc462b1d09821d43710bd477acdf11e", size = 302024 },
+    { url = "https://files.pythonhosted.org/packages/6a/57/94225fe5e9dabdc0ff60c88cbfcedf11277f4b34e7ab1373d3e62dbdd207/neo4j-5.28.1-py3-none-any.whl", hash = "sha256:6755ef9e5f4e14b403aef1138fb6315b120631a0075c138b5ddb2a06b87b09fd", size = 312258 },
 ]
 
 [[package]]

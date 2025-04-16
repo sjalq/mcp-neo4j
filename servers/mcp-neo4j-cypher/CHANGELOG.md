@@ -9,6 +9,7 @@
 * Tool responses now return JSON serialized results
 * Update README with new config options 
 * Update integration tests
+* Pull out common functions to a common directory for all servers to use
 
 ### Added
 

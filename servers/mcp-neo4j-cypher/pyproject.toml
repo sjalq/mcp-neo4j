@@ -8,6 +8,7 @@ dependencies = [
     "mcp[cli]>=1.6.0",
     "neo4j>=5.26.0",
     "pydantic>=2.10.1",
+    "common"
 ]
 
 [build-system]
@@ -22,5 +23,11 @@ dev-dependencies = [
  "ruff>=0.11.5",
 ]
 
+[tool.uv.sources]
+common = { path = "../common", editable = true }
+
 [project.scripts]
 mcp-neo4j-cypher = "mcp_neo4j_cypher:main"
+
+[tool.hatch.metadata]
+allow-direct-references = true

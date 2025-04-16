@@ -38,13 +38,6 @@ def healthcheck(sync_neo4j_driver: Driver):
     yield
 
 
-@pytest_asyncio.fixture(scope="session")
-async def mcp_server(async_neo4j_driver):
-    mcp = create_mcp_server(async_neo4j_driver, "neo4j")
-
-    return mcp
-
-
 @pytest.fixture(scope="session")
 def init_data(sync_neo4j_driver: Driver, clear_data: Any):
     with sync_neo4j_driver.session(database="neo4j") as session:
