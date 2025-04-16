@@ -177,7 +177,6 @@ def main(
 ) -> None:
     logger.info("Starting MCP neo4j Server")
 
-    # create the neo4j driver
     neo4j_driver = AsyncGraphDatabase.driver(
         db_url,
         auth=(
@@ -186,13 +185,10 @@ def main(
         ),
     )
 
-    # create the MCP server
     mcp = create_mcp_server(neo4j_driver, database)
 
-    # run healthcheck before starting the server
     healthcheck(db_url, username, password, database)
 
-    # run the MCP server
     mcp.run(transport="stdio")
 
 
