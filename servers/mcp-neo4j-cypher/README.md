@@ -15,19 +15,21 @@ The server offers these core tools:
    - Execute Cypher read queries to read data from the database
    - Input: 
      - `query` (string): The Cypher query to execute
-   - Returns: Query results as array of objects
+     - `params` (dictionary, optional): Parameters to pass to the Cypher query
+   - Returns: Query results as JSON serialized array of objects
 
 - `write-neo4j-cypher`
    - Execute updating Cypher queries
    - Input:
      - `query` (string): The Cypher update query
-   - Returns: A result summary counter with `{ nodes_updated: number, relationships_created: number, ... }`
+     - `params` (dictionary, optional): Parameters to pass to the Cypher query
+   - Returns: A JSON serialized result summary counter with `{ nodes_updated: number, relationships_created: number, ... }`
 
 #### 🕸️ Schema Tools
 - `get-neo4j-schema`
    - Get a list of all nodes types in the graph database, their attributes with name, type and relationships to other node types
    - No input required
-   - Returns: List of node label with two dictionaries one for attributes and one for relationships
+   - Returns: JSON serialized list of node labels with two dictionaries: one for attributes and one for relationships
 
 ## 🔧 Usage with Claude Desktop
 
@@ -35,14 +37,7 @@ The server offers these core tools:
 
 Can be found on PyPi https://pypi.org/project/mcp-neo4j-cypher/
 
-Add the server to your `claude_desktop_config.json` with configuration of:
-
-* db-url
-* username
-* password
-
-
-Alternatively, you can set environment variables:
+Add the server to your `claude_desktop_config.json` with configuration through environment variables:
 
 ```json
 "mcpServers": {
@@ -50,9 +45,10 @@ Alternatively, you can set environment variables:
     "command": "uvx",
     "args": [ "mcp-neo4j-cypher==0.1.2" ],
     "env": {
-      "NEO4J_URL": "bolt://localhost:7687",
+      "NEO4J_URI": "bolt://localhost:7687",
       "NEO4J_USERNAME": "neo4j",
-      "NEO4J_PASSWORD": "<your-password>"
+      "NEO4J_PASSWORD": "<your-password>",
+      "NEO4J_DATABASE": "neo4j"
     }
   }
 }
@@ -66,17 +62,17 @@ Here is an example connection for the movie database with Movie, Person (Actor, 
     "movies-neo4j": {
       "command": "uvx",
       "args": ["mcp-neo4j-cypher==0.1.2"],
-          "env": {
-      "NEO4J_URL": "neo4j+s://demo.neo4jlabs.com",
-      "NEO4J_USERNAME": "recommendations",
-      "NEO4J_PASSWORD": "recommendations"
-    }
+      "env": {
+        "NEO4J_URI": "neo4j+s://demo.neo4jlabs.com",
+        "NEO4J_USERNAME": "recommendations",
+        "NEO4J_PASSWORD": "recommendations"
+      }
     }   
   }
 }
 ```
 
-Syntax with `--db-url`, `--username` and `--password` was supported but will be removed in future versions:
+Syntax with `--db-url`, `--username` and `--password` command line arguments is still supported but environment variables are preferred:
 
 <details>
   <summary>Legacy Syntax</summary>
@@ -124,7 +120,7 @@ Here is an example connection for the movie database with Movie, Person (Actor, 
     "args": [
       "run",
       "--rm",
-      "-e", "NEO4J_URL=bolt://host.docker.internal:7687",
+      "-e", "NEO4J_URI=bolt://host.docker.internal:7687",
       "-e", "NEO4J_USERNAME=neo4j",
       "-e", "NEO4J_PASSWORD=<your-password>",
       "mcp/neo4j-cypher:0.1.2"
@@ -164,6 +160,17 @@ source .venv/bin/activate  # On Unix/macOS
 uv pip install -e ".[dev]"
 ```
 
+3. Run Integration Tests
+
+**CLOSE ANY LOCAL NEO4J DATABASES BEFORE RUNNING TESTS**
+* Tests will deploy a local docker container containing the test Neo4j instance. 
+* However if a Neo4j database is running locally, then the test driver may connect here instead. 
+* **This will result in you local Neo4j database having its contents erased.**
+
+```bash
+./tests.sh
+```
+
 ### 🔧 Development Configuration
 
 ```json
@@ -175,7 +182,7 @@ uv pip install -e ".[dev]"
       "--directory", "parent_of_servers_repo/servers/mcp-neo4j-cypher/src",
       "run", "mcp-neo4j-cypher"],
     "env": {
-      "NEO4J_URL": "bolt://localhost",
+      "NEO4J_URI": "bolt://localhost",
       "NEO4J_USERNAME": "neo4j",
       "NEO4J_PASSWORD": "<your-password>"
     }
@@ -192,7 +199,7 @@ Build and run the Docker container:
 docker build -t mcp/neo4j-cypher:latest .
 
 # Run the container
-docker run -e NEO4J_URL="bolt://host.docker.internal:7687" \
+docker run -e NEO4J_URI="bolt://host.docker.internal:7687" \
           -e NEO4J_USERNAME="neo4j" \
           -e NEO4J_PASSWORD="your-password" \
           mcp/neo4j-cypher:latest

@@ -1,1 +1,3 @@
-uv run --env-file ../.env pytest tests/test_neo4j_cypher_integration.py
+docker compose -f tests/integration/docker-compose.yml up -d
+uv run pytest tests/integration -s 
+docker compose -f tests/integration/docker-compose.yml stop
