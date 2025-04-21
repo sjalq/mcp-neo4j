@@ -162,11 +162,6 @@ uv pip install -e ".[dev]"
 
 3. Run Integration Tests
 
-**CLOSE ANY LOCAL NEO4J DATABASES BEFORE RUNNING TESTS**
-* Tests will deploy a local docker container containing the test Neo4j instance. 
-* However if a Neo4j database is running locally, then the test driver may connect here instead. 
-* **This will result in you local Neo4j database having its contents erased.**
-
 ```bash
 ./tests.sh
 ```

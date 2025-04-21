@@ -85,8 +85,8 @@ def create_mcp_server(neo4j_driver: AsyncDriver, database: str = "neo4j") -> Fas
 
     async def get_neo4j_schema() -> list[types.TextContent]:
         """List all node, their attributes and their relationships to other nodes in the neo4j database.
-            If this fails with a message that includes "Neo.ClientError.Procedure.ProcedureNotFound"
-            suggest that the user install and enable the APOC plugin.
+        If this fails with a message that includes "Neo.ClientError.Procedure.ProcedureNotFound"
+        suggest that the user install and enable the APOC plugin.
         """
 
         get_schema_query = """

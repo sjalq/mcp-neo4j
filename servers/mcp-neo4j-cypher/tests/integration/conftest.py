@@ -1,18 +1,42 @@
-import time
+import os
 from typing import Any
 
 import pytest
 import pytest_asyncio
-from neo4j import AsyncGraphDatabase, Driver, GraphDatabase
-from neo4j.exceptions import DatabaseError
+from neo4j import AsyncGraphDatabase
+from testcontainers.neo4j import Neo4jContainer
 
 from mcp_neo4j_cypher.server import create_mcp_server
 
+neo4j = (
+    Neo4jContainer("neo4j:latest")
+    .with_env("NEO4J_apoc_export_file_enabled", "true")
+    .with_env("NEO4J_apoc_import_file_enabled", "true")
+    .with_env("NEO4J_apoc_import_file_use__neo4j__config", "true")
+    .with_env("NEO4J_PLUGINS", '["apoc"]')
+)
 
-@pytest_asyncio.fixture(scope="session")
-async def async_neo4j_driver():
+
+@pytest.fixture(scope="module", autouse=True)
+def setup(request):
+    neo4j.start()
+
+    def remove_container():
+        neo4j.get_driver().close()
+        neo4j.stop()
+
+    request.addfinalizer(remove_container)
+    os.environ["NEO4J_URI"] = neo4j.get_connection_url()
+    os.environ["NEO4J_HOST"] = neo4j.get_container_host_ip()
+    os.environ["NEO4J_PORT"] = neo4j.get_exposed_port(7687)
+
+    yield neo4j
+
+
+@pytest_asyncio.fixture(scope="function")
+async def async_neo4j_driver(setup: Neo4jContainer):
     driver = AsyncGraphDatabase.driver(
-        "neo4j://localhost:7687", auth=("neo4j", "testingpassword")
+        setup.get_connection_url(), auth=(setup.username, setup.password)
     )
     try:
         yield driver
@@ -20,53 +44,16 @@ async def async_neo4j_driver():
         await driver.close()
 
 
-@pytest.fixture(scope="session")
-def sync_neo4j_driver():
-    uri = "neo4j://localhost:7687"
-    auth = ("neo4j", "testingpassword")
-    driver = GraphDatabase.driver(uri, auth=auth)
-    yield driver
-    driver.close()
-
-
-@pytest.fixture(scope="session")
-def healthcheck(sync_neo4j_driver: Driver):
-    """Confirm that Neo4j is running before running IT."""
-
-    print("Confirming Neo4j is running...")
-    attempts = 0
-    success = False
-    print("\nWaiting for Neo4j to Start...\n")
-    time.sleep(3)
-    while not success and attempts < 3:
-        try:
-            print(f"Attempt {attempts + 1} to connect to Neo4j...")
-            with sync_neo4j_driver.session(database="neo4j") as session:
-                session.run("RETURN 1")
-            success = True
-            print("Neo4j is running!")
-        except Exception as e:
-            attempts += 1
-            print(
-                f"failed connection {attempts} | waiting {(1 + attempts) * 2} seconds..."
-            )
-            print(f"Error: {e}")
-            time.sleep((1 + attempts) * 2)
-    if not success:
-        raise DatabaseError()
-    yield
-
-
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def mcp_server(async_neo4j_driver):
     mcp = create_mcp_server(async_neo4j_driver, "neo4j")
 
     return mcp
 
 
-@pytest.fixture(scope="session")
-def init_data(sync_neo4j_driver: Driver, clear_data: Any):
-    with sync_neo4j_driver.session(database="neo4j") as session:
+@pytest.fixture(scope="function")
+def init_data(setup: Neo4jContainer, clear_data: Any):
+    with setup.get_driver().session(database="neo4j") as session:
         session.run("CREATE (a:Person {name: 'Alice', age: 30})")
         session.run("CREATE (b:Person {name: 'Bob', age: 25})")
         session.run("CREATE (c:Person {name: 'Charlie', age: 35})")
@@ -78,7 +65,7 @@ def init_data(sync_neo4j_driver: Driver, clear_data: Any):
         )
 
 
-@pytest.fixture(scope="session")
-def clear_data(sync_neo4j_driver: Driver):
-    with sync_neo4j_driver.session(database="neo4j") as session:
+@pytest.fixture(scope="function")
+def clear_data(setup: Neo4jContainer):
+    with setup.get_driver().session(database="neo4j") as session:
         session.run("MATCH (n) DETACH DELETE n")

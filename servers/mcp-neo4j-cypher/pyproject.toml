@@ -20,6 +20,7 @@ dev-dependencies = [
  "pytest>=7.0.0",
  "pytest-asyncio>=0.20.3",
  "ruff>=0.11.5",
+ "testcontainers[neo4j]>=4.10.0"
 ]
 
 [project.scripts]
