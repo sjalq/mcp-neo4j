@@ -10,6 +10,12 @@
 
 ### Added
 
+## v0.2.1
+
+### Fixed
+
+* Fixed MCP version notation for declaration in config files - README
+
 ## v0.2.0
 
 ### Changed
