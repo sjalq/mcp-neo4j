@@ -5,8 +5,8 @@ import pytest
 from mcp.server import FastMCP
 
 
-@pytest.mark.asyncio(loop_scope="session")
-async def test_get_neo4j_schema(mcp_server: FastMCP, healthcheck: Any, init_data: Any):
+@pytest.mark.asyncio(loop_scope="function")
+async def test_get_neo4j_schema(mcp_server: FastMCP, init_data: Any):
     response = await mcp_server.call_tool("get_neo4j_schema", dict())
 
     schema = json.loads(response[0].text)[0]
@@ -17,8 +17,8 @@ async def test_get_neo4j_schema(mcp_server: FastMCP, healthcheck: Any, init_data
     assert "relationships" in schema
 
 
-@pytest.mark.asyncio(loop_scope="session")
-async def test_write_neo4j_cypher(mcp_server: FastMCP, healthcheck: Any):
+@pytest.mark.asyncio(loop_scope="function")
+async def test_write_neo4j_cypher(mcp_server: FastMCP):
     # Execute a Cypher query to create a node
     query = "CREATE (n:Test {name: 'test', age: 123}) RETURN n.name"
     response = await mcp_server.call_tool("write_neo4j_cypher", dict(query=query))
@@ -31,8 +31,8 @@ async def test_write_neo4j_cypher(mcp_server: FastMCP, healthcheck: Any):
     assert result["properties_set"] == 2
 
 
-@pytest.mark.asyncio(loop_scope="session")
-async def test_read_neo4j_cypher(mcp_server: FastMCP, healthcheck: Any, init_data: Any):
+@pytest.mark.asyncio(loop_scope="function")
+async def test_read_neo4j_cypher(mcp_server: FastMCP, init_data: Any):
     # Prepare test data
 
     # Execute a complex read query

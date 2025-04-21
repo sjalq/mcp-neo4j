@@ -1,6 +1,16 @@
-## Next
+## Next 
 
 ### Fixed
+
+* IT no longer has risk of affecting locally deployed Neo4j instances
+
+### Changed
+
+* IT now uses Testcontainers library instead of Docker scripts 
+
+### Added
+
+## v0.2.0
 
 ### Changed
 
