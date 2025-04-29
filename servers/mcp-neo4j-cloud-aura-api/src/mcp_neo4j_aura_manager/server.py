@@ -192,10 +192,10 @@ class AuraAPIClient:
         
         # Add optional parameters only if they're provided and applicable            
         if graph_analytics_plugin and type in ["professional-db", "enterprise-db", "business-critical"]:
-            payload["graph_analytics_plugin"] = lower(str(graph_analytics_plugin))
+            payload["graph_analytics_plugin"] = str(graph_analytics_plugin).lower()
             
         if vector_optimized and type in ["professional-db", "enterprise-db", "business-critical"]:
-            payload["vector_optimized"] = lower(str(vector_optimized))
+            payload["vector_optimized"] = str(vector_optimized).lower()
             
         if source_instance_id and type in ["professional-db", "enterprise-db", "business-critical"]:
             payload["source_instance_id"] = source_instance_id
@@ -216,7 +216,7 @@ class AuraAPIClient:
         if memory is not None:
             payload["memory"] = f"{memory}GB"
         if vector_optimized is not None:
-            payload["vector_optimized"] = lower(str(vector_optimized))
+            payload["vector_optimized"] = str(vector_optimized).lower()
         
         print("Update instance payload:")
         print(payload)
