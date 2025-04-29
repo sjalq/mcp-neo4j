@@ -175,6 +175,7 @@ def test_integration_flow(aura_client, test_type):
             print("Updating instance memory")
             updated = aura_client.update_instance(instance_id=instance_id, memory=2)
             instance_details = wait_for_instance_status(aura_client, instance_id,"running")
+            assert instance_details["status"] == "running"
             assert instance_details["memory"] == "2GB"
 
         except Exception as e:
