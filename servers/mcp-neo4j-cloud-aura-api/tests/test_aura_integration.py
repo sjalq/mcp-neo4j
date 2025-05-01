@@ -263,3 +263,11 @@ def test_create_and_delete_instance_integration(aura_client, test_type):
         assert "status" in instance_details
         print(f"Deleted test instance {instance_id}: {delete_result} {instance_details}")
 
+
+def test_create_instance_vector_optimized_and_memory_less_than_4_should_raise_error(aura_client):
+    with pytest.raises(ValueError):
+        aura_client.create_instance(memory=3, vector_optimized=True, tenant_id="test-tenant-1", name="Test Instance")
+
+def test_update_instance_vector_optimized_and_memory_less_than_4_should_raise_error(aura_client):
+    with pytest.raises(ValueError):
+        aura_client.update_instance(instance_id="test-instance-1", memory=3, vector_optimized=True)
