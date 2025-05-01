@@ -1,9 +1,5 @@
-import argparse
-import asyncio
 import json
 import logging
-import os
-import sys
 import time
 from typing import Any, Dict, List, Optional, Union
 
@@ -19,6 +15,30 @@ import mcp.server.stdio
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+
+def _validate_region(cloud_provider: str, region: str) -> None:
+    """
+    Validate the region exists for the given cloud provider.
+
+    Args:
+        cloud_provider: The cloud provider to validate the region for
+        region: The region to validate
+
+    Returns:
+        None
+    
+    Raises:
+        ValueError: If the region is not valid for the given cloud provider
+    """
+
+    if cloud_provider == "gcp" and region.count("-") != 1:
+        raise ValueError(f"Invalid region for GCP: {region}. Must follow the format 'region-zonenumber'. Refer to https://neo4j.com/docs/aura/managing-instances/regions/ for valid regions.")
+    elif cloud_provider == "aws" and region.count("-") != 2:
+        raise ValueError(f"Invalid region for AWS: {region}. Must follow the format 'region-zone-number'. Refer to https://neo4j.com/docs/aura/managing-instances/regions/ for valid regions.")
+    elif cloud_provider == "azure" and region.count("-") != 0:
+        raise ValueError(f"Invalid region for Azure: {region}. Must follow the format 'regionzone'. Refer to https://neo4j.com/docs/aura/managing-instances/regions/ for valid regions.")
+
+    
 class AuraAPIClient:
     """Client for interacting with Neo4j Aura API."""
     
@@ -172,12 +192,17 @@ class AuraAPIClient:
             if cloud_provider and cloud_provider not in ["gcp", "aws", "azure"]:
                 raise ValueError("cloud_provider must be one of: gcp, aws, azure")
             
+            if vector_optimized and memory < 4:
+                raise ValueError("vector optimized instances must have at least 4GB memory")
+            
             # If cloning, source_instance_id is required
             if source_instance_id is not None:
                 if not isinstance(source_instance_id, str):
                     raise ValueError("source_instance for clone from instance must be defined")
         else:
             raise ValueError(f"Invalid type {type}")
+        
+        _validate_region(cloud_provider, region)
             
         url = f"{self.BASE_URL}/instances"
         payload = {
@@ -221,6 +246,9 @@ class AuraAPIClient:
             payload["storage"] = f"{storage}GB"
         if vector_optimized is not None:
             payload["vector_optimized"] = str(vector_optimized).lower()
+        
+        if payload["vector_optimized"] == "true" and int(payload["memory"]) < 4:
+            raise ValueError("vector optimized instances must have at least 4GB memory")
         
         print("Update instance payload:")
         print(payload)
@@ -485,7 +513,7 @@ async def main(client_id: str, client_secret: str):
                         },
                         "region": {
                             "type": "string",
-                            "description": "Region for the instance (e.g., 'us-east-1')",
+                            "description": "Region for the instance (e.g., 'us-central1')",
                             "default": "us-central1"
                         },
                         "type": {
@@ -495,7 +523,7 @@ async def main(client_id: str, client_secret: str):
                         },
                         "vector_optimized": {
                             "type": "boolean",
-                            "description": "Whether the instance is optimized for vector operations",
+                            "description": "Whether the instance is optimized for vector operations. Only allowed for instance with more than 4GB memory.",
                             "default": False
                         },
                         "cloud_provider": {
