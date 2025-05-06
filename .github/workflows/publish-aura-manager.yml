@@ -12,10 +12,7 @@ on:
   push:
     tags:
       - mcp-neo4j-aura-manager-v*
-  release:
-    types: [published]
-    tags:
-      - mcp-neo4j-aura-manager-v*
+  workflow_dispatch:  # Allows manual triggering of the workflow
 
 permissions:
   contents: read
