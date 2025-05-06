@@ -9,10 +9,10 @@
 name: Publish Neo4j MCP Cypher Package
 
 on:
-  release:
-    types: [published]
+  push:
     tags:
       - mcp-neo4j-cypher-v*
+  workflow_dispatch:  # Allows manual triggering of the workflow
 
 permissions:
   contents: read

@@ -12,10 +12,7 @@ on:
   push:
     tags:
       - mcp-neo4j-memory-v*
-  release:
-    types: [published]
-    tags:
-      - mcp-neo4j-memory-v*
+  workflow_dispatch:  # Allows manual triggering of the workflow
 
 permissions:
   contents: read
