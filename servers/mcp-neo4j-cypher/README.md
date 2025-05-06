@@ -65,7 +65,8 @@ Here is an example connection for the movie database with Movie, Person (Actor, 
       "env": {
         "NEO4J_URI": "neo4j+s://demo.neo4jlabs.com",
         "NEO4J_USERNAME": "recommendations",
-        "NEO4J_PASSWORD": "recommendations"
+        "NEO4J_PASSWORD": "recommendations",
+        "NEO4J_DATABASE": "recommendations"
       }
     }   
   }
@@ -101,10 +102,11 @@ Here is an example connection for the movie database with Movie, Person (Actor, 
   "mcpServers": {
     "movies-neo4j": {
       "command": "uvx",
-      "args": ["mcp-neo4j-cypher@0.1.1", 
+      "args": ["mcp-neo4j-cypher@0.2.1", 
       "--db-url", "neo4j+s://demo.neo4jlabs.com", 
       "--user", "recommendations", 
-      "--password", "recommendations"]
+      "--password", "recommendations",
+      "--database", "recommendations"]
     }   
   }
 }
@@ -179,7 +181,8 @@ uv pip install -e ".[dev]"
     "env": {
       "NEO4J_URI": "bolt://localhost",
       "NEO4J_USERNAME": "neo4j",
-      "NEO4J_PASSWORD": "<your-password>"
+      "NEO4J_PASSWORD": "<your-password>",
+      "NEO4J_DATABASE": "neo4j"
     }
   }
 }
