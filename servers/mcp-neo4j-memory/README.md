@@ -137,7 +137,7 @@ Alternatively, you can set environment variables:
 "mcpServers": {
   "neo4j": {
     "command": "uvx",
-    "args": [ "mcp-neo4j-memory==0.1.2" ],
+    "args": [ "mcp-neo4j-memory@0.1.2" ],
     "env": {
       "NEO4J_URL": "neo4j+s://xxxx.databases.neo4j.io",
       "NEO4J_USERNAME": "<your-username>",
