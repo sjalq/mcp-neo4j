@@ -381,6 +381,21 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str):
             ),
             types.Tool(
                 name="find_nodes",
+                description="Find specific nodes in the knowledge graph by their names",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "names": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "An array of entity names to retrieve",
+                        },
+                    },
+                    "required": ["names"],
+                },
+            ),
+            types.Tool(
+                name="open_nodes",
                 description="Open specific nodes in the knowledge graph by their names",
                 inputSchema={
                     "type": "object",
@@ -401,6 +416,10 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str):
         name: str, arguments: Dict[str, Any] | None
     ) -> List[types.TextContent | types.ImageContent]:
         try:
+            if name == "read_graph":
+                result = await memory.read_graph()
+                return [types.TextContent(type="text", text=json.dumps(result.model_dump(), indent=2))]
+
             if not arguments:
                 raise ValueError(f"No arguments provided for tool: {name}")
 
@@ -433,15 +452,11 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str):
                 await memory.delete_relations(relations)
                 return [types.TextContent(type="text", text="Relations deleted successfully")]
                 
-            elif name == "read_graph":
-                result = await memory.read_graph()
-                return [types.TextContent(type="text", text=json.dumps(result.model_dump(), indent=2))]
-                
             elif name == "search_nodes":
                 result = await memory.search_nodes(arguments.get("query", ""))
                 return [types.TextContent(type="text", text=json.dumps(result.model_dump(), indent=2))]
                 
-            elif name == "find_nodes":
+            elif name == "find_nodes" or name == "open_nodes":
                 result = await memory.find_nodes(arguments.get("names", []))
                 return [types.TextContent(type="text", text=json.dumps(result.model_dump(), indent=2))]
                 

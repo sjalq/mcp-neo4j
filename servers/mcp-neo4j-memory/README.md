@@ -119,7 +119,7 @@ Add the server to your `claude_desktop_config.json` with configuration of:
   "neo4j": {
     "command": "uvx",
     "args": [
-      "mcp-neo4j-memory@0.1.2",
+      "mcp-neo4j-memory@0.1.3",
       "--db-url",
       "neo4j+s://xxxx.databases.neo4j.io",
       "--username",
@@ -137,7 +137,7 @@ Alternatively, you can set environment variables:
 "mcpServers": {
   "neo4j": {
     "command": "uvx",
-    "args": [ "mcp-neo4j-memory@0.1.2" ],
+    "args": [ "mcp-neo4j-memory@0.1.3" ],
     "env": {
       "NEO4J_URL": "neo4j+s://xxxx.databases.neo4j.io",
       "NEO4J_USERNAME": "<your-username>",
@@ -159,7 +159,7 @@ Alternatively, you can set environment variables:
       "-e", "NEO4J_URL=neo4j+s://xxxx.databases.neo4j.io",
       "-e", "NEO4J_USERNAME=<your-username>",
       "-e", "NEO4J_PASSWORD=<your-password>",
-      "mcp/neo4j-memory:0.1.2"
+      "mcp/neo4j-memory:0.1.3"
     ]
   }
 }
