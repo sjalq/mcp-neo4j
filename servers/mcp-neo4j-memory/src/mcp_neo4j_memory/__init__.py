@@ -16,9 +16,12 @@ def main():
     parser.add_argument('--password', 
                        default=os.getenv("NEO4J_PASSWORD", "password"),
                        help='Neo4j password')
+    parser.add_argument("--database",
+                        default=os.getenv("NEO4J_DATABASE", "neo4j"),
+                        help="Neo4j database name")
     
     args = parser.parse_args()
-    asyncio.run(server.main(args.db_url, args.username, args.password))
+    asyncio.run(server.main(args.db_url, args.username, args.password, args.database))
 
 
 # Optionally expose other important items at package level

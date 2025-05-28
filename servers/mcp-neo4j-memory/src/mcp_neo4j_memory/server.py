@@ -197,13 +197,14 @@ class Neo4jMemory:
     async def find_nodes(self, names: List[str]) -> KnowledgeGraph:
         return await self.load_graph("name: (" + " ".join(names) + ")")
 
-async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str):
+async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_database: str):
     logger.info(f"Connecting to neo4j MCP Server with DB URL: {neo4j_uri}")
 
     # Connect to Neo4j
     neo4j_driver = GraphDatabase.driver(
         neo4j_uri,
-        auth=(neo4j_user, neo4j_password)
+        auth=(neo4j_user, neo4j_password), 
+        database=neo4j_database
     )
     
     # Verify connection
