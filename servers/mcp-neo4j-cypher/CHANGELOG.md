@@ -4,12 +4,14 @@
 
 * IT no longer has risk of affecting locally deployed Neo4j instances
 * Env config now supports NEO4J_URI and NEO4J_URL variables
+* Fixed async issues with main server function not being async
 
 ### Changed
 
 * IT now uses Testcontainers library instead of Docker scripts 
 
 ### Added
+* Support for transport config in cli args
 
 ## v0.2.1
 

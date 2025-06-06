@@ -3,7 +3,7 @@ import logging
 import re
 import sys
 import time
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 import mcp.types as types
 from mcp.server.fastmcp import FastMCP
@@ -172,11 +172,12 @@ RETURN label, apoc.map.fromPairs(attributes) as attributes, apoc.map.fromPairs(r
     return mcp
 
 
-def main(
+async def main(
     db_url: str,
     username: str,
     password: str,
     database: str,
+    transport: Literal["stdio", "sse"] = "stdio",
 ) -> None:
     logger.info("Starting MCP neo4j Server")
 
@@ -192,7 +193,13 @@ def main(
 
     healthcheck(db_url, username, password, database)
 
-    mcp.run(transport="stdio")
+    match transport:
+        case "stdio":
+            await mcp.run_stdio_async()
+        case "sse":
+            await mcp.run_sse_async()
+        case _:
+            raise ValueError(f"Invalid transport: {transport} | Must be either 'stdio' or 'sse'")
 
 
 if __name__ == "__main__":
