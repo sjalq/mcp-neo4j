@@ -55,13 +55,25 @@ jobs:
       url: https://pypi.org/project/mcp-neo4j-cypher/
 
     steps:
-      - name: Retrieve release distributions
-        uses: actions/download-artifact@v4
-        with:
-          name: release-dists
-          path: servers/mcp-neo4j-cypher/dist/
 
-      - name: Publish release distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
         with:
-          packages-dir: servers/mcp-neo4j-cypher/dist/
+          python-version-file: "servers/mcp-neo4j-cypher/pyproject.toml"
+
+      - name: Build release distributions
+        run: |
+          cd servers/mcp-neo4j-cypher/
+          uv build
+
+      - name: Publish release
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          cd servers/mcp-neo4j-cypher/
+          uv publish
