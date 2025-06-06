@@ -3,7 +3,7 @@ import logging
 import re
 import sys
 import time
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 import mcp.types as types
 from mcp.server.fastmcp import FastMCP
@@ -177,6 +177,7 @@ def main(
     username: str,
     password: str,
     database: str,
+    transport: Literal["stdio", "sse"] = "stdio",
 ) -> None:
     logger.info("Starting MCP neo4j Server")
 
