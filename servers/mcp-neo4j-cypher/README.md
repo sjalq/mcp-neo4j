@@ -37,13 +37,13 @@ The server offers these core tools:
 
 Can be found on PyPi https://pypi.org/project/mcp-neo4j-cypher/
 
-Add the server to your `claude_desktop_config.json` with configuration through environment variables:
+Add the server to your `claude_desktop_config.json` with the database connection configuration through environment variables. You may also specify the transport method with cli arguments.
 
 ```json
 "mcpServers": {
   "neo4j-aura": {
     "command": "uvx",
-    "args": [ "mcp-neo4j-cypher@0.2.1" ],
+    "args": [ "mcp-neo4j-cypher@0.2.1", "--transport", "stdio"  ],
     "env": {
       "NEO4J_URI": "bolt://localhost:7687",
       "NEO4J_USERNAME": "neo4j",
@@ -61,7 +61,7 @@ Here is an example connection for the movie database with Movie, Person (Actor, 
   "mcpServers": {
     "movies-neo4j": {
       "command": "uvx",
-      "args": ["mcp-neo4j-cypher@0.2.1"],
+      "args": [ "mcp-neo4j-cypher@0.2.1" ],
       "env": {
         "NEO4J_URI": "neo4j+s://demo.neo4jlabs.com",
         "NEO4J_USERNAME": "recommendations",
@@ -83,7 +83,7 @@ Syntax with `--db-url`, `--username` and `--password` command line arguments is 
   "neo4j": {
     "command": "uvx",
     "args": [
-      "mcp-neo4j-cypher@0.1.1",
+      "mcp-neo4j-cypher@0.2.1",
       "--db-url",
       "bolt://localhost",
       "--username",
@@ -177,7 +177,7 @@ uv pip install -e ".[dev]"
     "command": "uv",
     "args": [
       "--directory", "parent_of_servers_repo/servers/mcp-neo4j-cypher/src",
-      "run", "mcp-neo4j-cypher"],
+      "run", "mcp-neo4j-cypher", "--transport", "stdio"],
     "env": {
       "NEO4J_URI": "bolt://localhost",
       "NEO4J_USERNAME": "neo4j",
