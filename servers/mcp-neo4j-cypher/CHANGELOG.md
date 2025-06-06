@@ -9,6 +9,7 @@
 ### Changed
 
 * IT now uses Testcontainers library instead of Docker scripts 
+* Remove healthcheck from main function
 
 ### Added
 * Support for transport config in cli args
