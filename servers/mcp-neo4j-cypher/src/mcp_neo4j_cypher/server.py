@@ -20,45 +20,6 @@ from pydantic import Field
 logger = logging.getLogger("mcp_neo4j_cypher")
 
 
-def healthcheck(db_url: str, username: str, password: str, database: str) -> None:
-    """
-    Confirm that Neo4j is running before continuing.
-    Creates a a sync Neo4j driver instance for checking connection and closes it after connection is established.
-    """
-
-    print("Confirming Neo4j is running...", file=sys.stderr)
-    sync_driver = GraphDatabase.driver(
-        db_url,
-        auth=(
-            username,
-            password,
-        ),
-    )
-    attempts = 0
-    success = False
-    print("\nWaiting for Neo4j to Start...\n", file=sys.stderr)
-    time.sleep(3)
-    ex = DatabaseError()
-    while not success and attempts < 3:
-        try:
-            with sync_driver.session(database=database) as session:
-                session.run("RETURN 1")
-            success = True
-            sync_driver.close()
-        except Exception as e:
-            ex = e
-            attempts += 1
-            print(
-                f"failed connection {attempts} | waiting {(1 + attempts) * 2} seconds...",
-                file=sys.stderr,
-            )
-            print(f"Error: {e}", file=sys.stderr)
-            time.sleep((1 + attempts) * 2)
-    if not success:
-        sync_driver.close()
-        raise ex
-
-
 async def _read(tx: AsyncTransaction, query: str, params: dict[str, Any]) -> str:
     raw_results = await tx.run(query, params)
     eager_results = await raw_results.to_eager_result()
@@ -190,8 +151,6 @@ async def main(
     )
 
     mcp = create_mcp_server(neo4j_driver, database)
-
-    healthcheck(db_url, username, password, database)
 
     match transport:
         case "stdio":
