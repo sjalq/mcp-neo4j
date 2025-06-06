@@ -3,6 +3,7 @@
 ### Fixed
 
 * IT no longer has risk of affecting locally deployed Neo4j instances
+* Env config now supports NEO4J_URI and NEO4J_URL variables
 
 ### Changed
 

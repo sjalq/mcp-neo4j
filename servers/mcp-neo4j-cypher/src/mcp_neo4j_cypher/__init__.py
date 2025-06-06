@@ -16,7 +16,7 @@ def main():
     args = parser.parse_args()
     asyncio.run(
         server.main(
-            args.db_url or os.getenv("NEO4J_URI", "bolt://localhost:7687"),
+            args.db_url or os.getenv("NEO4J_URL") or os.getenv("NEO4J_URI", "bolt://localhost:7687"),
             args.username or os.getenv("NEO4J_USERNAME", "neo4j"),
             args.password or os.getenv("NEO4J_PASSWORD", "password"),
             args.database or os.getenv("NEO4J_DATABASE", "neo4j"),
