@@ -1,4 +1,13 @@
-## Next 
+## Next
+
+### Fixed
+
+### Changed
+
+### Added
+
+
+## v0.2.2 
 
 ### Fixed
 
