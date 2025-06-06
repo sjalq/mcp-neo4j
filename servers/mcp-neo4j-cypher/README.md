@@ -43,7 +43,7 @@ Add the server to your `claude_desktop_config.json` with the database connection
 "mcpServers": {
   "neo4j-aura": {
     "command": "uvx",
-    "args": [ "mcp-neo4j-cypher@0.2.1", "--transport", "stdio"  ],
+    "args": [ "mcp-neo4j-cypher@0.2.2", "--transport", "stdio"  ],
     "env": {
       "NEO4J_URI": "bolt://localhost:7687",
       "NEO4J_USERNAME": "neo4j",
@@ -61,7 +61,7 @@ Here is an example connection for the movie database with Movie, Person (Actor, 
   "mcpServers": {
     "movies-neo4j": {
       "command": "uvx",
-      "args": [ "mcp-neo4j-cypher@0.2.1" ],
+      "args": [ "mcp-neo4j-cypher@0.2.2" ],
       "env": {
         "NEO4J_URI": "neo4j+s://demo.neo4jlabs.com",
         "NEO4J_USERNAME": "recommendations",
@@ -83,7 +83,7 @@ Syntax with `--db-url`, `--username` and `--password` command line arguments is 
   "neo4j": {
     "command": "uvx",
     "args": [
-      "mcp-neo4j-cypher@0.2.1",
+      "mcp-neo4j-cypher@0.2.2",
       "--db-url",
       "bolt://localhost",
       "--username",
@@ -102,7 +102,7 @@ Here is an example connection for the movie database with Movie, Person (Actor, 
   "mcpServers": {
     "movies-neo4j": {
       "command": "uvx",
-      "args": ["mcp-neo4j-cypher@0.2.1", 
+      "args": ["mcp-neo4j-cypher@0.2.2", 
       "--db-url", "neo4j+s://demo.neo4jlabs.com", 
       "--user", "recommendations", 
       "--password", "recommendations",
