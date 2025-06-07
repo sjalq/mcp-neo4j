@@ -1,10 +1,12 @@
 import logging
 from typing import List, Dict, Any
 import asyncio
+import os
 
 from sentence_transformers import SentenceTransformer
 import numpy as np
 import neo4j
+import torch
 
 from .config import (
     EMBEDDING_MODEL, 
@@ -21,7 +23,12 @@ class VectorEnabledNeo4jMemory:
     def __init__(self, neo4j_driver, auto_migrate=True):
         self.neo4j_driver = neo4j_driver
         logger.info(f"Loading embedding model: {EMBEDDING_MODEL}")
-        self.encoder = SentenceTransformer(EMBEDDING_MODEL)
+        
+        # Use GPU if available, otherwise fallback to CPU
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        logger.info(f"Using device: {device}")
+        
+        self.encoder = SentenceTransformer(EMBEDDING_MODEL, device=device)
         self.encoder.max_seq_length = 512  # Optimize for memory content
         
         self.create_fulltext_index()
@@ -30,10 +37,20 @@ class VectorEnabledNeo4jMemory:
         # Schedule migration check if event loop is running
         if auto_migrate:
             try:
-                asyncio.create_task(self.ensure_all_indexed())
+                # Check if there's an event loop and schedule migration
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Schedule as a background task
+                    asyncio.create_task(self.ensure_all_indexed())
+                else:
+                    # No running loop, will run migration on first tool call
+                    self._migration_pending = True
             except RuntimeError:
-                # No event loop running, migration will be called manually
-                logger.info("No event loop running, migration check will be called manually")
+                # No event loop, will run migration on first tool call
+                self._migration_pending = True
+                logger.info("No event loop running, migration will run on first tool call")
+        else:
+            self._migration_pending = False
 
     def create_fulltext_index(self):
         """Create fulltext index for fallback search"""
@@ -101,6 +118,12 @@ class VectorEnabledNeo4jMemory:
 
     async def create_entities(self, entities: List) -> List:
         """Enhanced entity creation with automatic embedding generation"""
+        
+        # Run pending migration if needed
+        if hasattr(self, '_migration_pending') and self._migration_pending:
+            logger.info("Running pending migration on first entity creation")
+            await self.ensure_all_indexed()
+            self._migration_pending = False
         
         if not entities:
             return entities
