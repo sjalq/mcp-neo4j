@@ -25,8 +25,8 @@ class VectorEnabledNeo4jMemory:
         self.neo4j_driver = neo4j_driver
         logger.info(f"Loading embedding model: {EMBEDDING_MODEL}")
         
-        # Use GPU if available, otherwise fallback to CPU
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # Safe CUDA detection with fallback
+        device = self._detect_device()
         logger.info(f"Using device: {device}")
         
         self.encoder = SentenceTransformer(EMBEDDING_MODEL, device=device)
@@ -52,6 +52,25 @@ class VectorEnabledNeo4jMemory:
                 logger.info("No event loop running, migration will run on first tool call")
         else:
             self._migration_pending = False
+
+    def _detect_device(self):
+        """Detect the best available device for running the model"""
+        # Check environment variable override first
+        if os.environ.get('FORCE_CPU', '').lower() in ('1', 'true', 'yes'):
+            logger.info("FORCE_CPU environment variable set, using CPU")
+            return 'cpu'
+            
+        try:
+            # Try to use GPU if available
+            if torch.cuda.is_available():
+                logger.info("CUDA available, using GPU")
+                return 'cuda'
+            else:
+                logger.info("CUDA not available, using CPU")
+                return 'cpu'
+        except Exception as e:
+            logger.warning(f"CUDA detection failed ({e}), falling back to CPU")
+            return 'cpu'
 
     def create_fulltext_index(self):
         """Create fulltext index for fallback search"""
@@ -664,4 +683,6 @@ class VectorEnabledNeo4jMemory:
             self.neo4j_driver.execute_query(query, {
                 "source": relation.source,
                 "target": relation.target
-            }) 
+            })
+
+ 
