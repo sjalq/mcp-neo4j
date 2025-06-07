@@ -6,21 +6,21 @@ EMBEDDING_DIMENSIONS = 1024  # BGE-large uses 1024 dimensions
 SIMILARITY_THRESHOLD = 0.7   # Higher threshold for 1024-dim space
 BATCH_SIZE = 16              # Optimal batch size for BGE-large on CPU
 
-# Vector index settings
+# Vector index settings - using Entity base label
 VECTOR_INDEXES = [
     {
-        "name": "memory_content_embeddings",
-        "label": "Memory",
+        "name": "entity_content_embeddings",
+        "label": "Entity",
         "property": "content_embedding"
     },
     {
-        "name": "memory_observation_embeddings", 
-        "label": "Memory",
+        "name": "entity_observation_embeddings", 
+        "label": "Entity",
         "property": "observation_embedding"
     },
     {
-        "name": "memory_identity_embeddings",
-        "label": "Memory", 
+        "name": "entity_identity_embeddings",
+        "label": "Entity",
         "property": "identity_embedding"
     }
 ]

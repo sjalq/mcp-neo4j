@@ -38,8 +38,10 @@ class TestVectorEnabledNeo4jMemory:
             
             memory = VectorEnabledNeo4jMemory(mock_neo4j_driver, auto_migrate=False)
             
-            # Check model loading
-            mock_st.assert_called_once_with("BAAI/bge-large-en-v1.5")
+            # Check model loading (account for device parameter)
+            args, kwargs = mock_st.call_args
+            assert args[0] == "BAAI/bge-large-en-v1.5"
+            assert 'device' in kwargs  # May be 'cuda' or 'cpu' depending on system
             assert memory.encoder == mock_encoder
             assert memory.encoder.max_seq_length == 512
     
@@ -113,19 +115,19 @@ class TestVectorEnabledNeo4jMemory:
         
         # Check correct index was used
         call_args = memory_with_mocks.neo4j_driver.execute_query.call_args[0][0]
-        assert "memory_content_embeddings" in call_args
+        assert "entity_content_embeddings" in call_args
         
         # Test observations mode
         await memory_with_mocks.vector_search("leadership behavior", mode="observations")
         
         call_args = memory_with_mocks.neo4j_driver.execute_query.call_args[0][0]
-        assert "memory_observations_embeddings" in call_args
+        assert "entity_observation_embeddings" in call_args
         
         # Test identity mode
         await memory_with_mocks.vector_search("Cyril Ramaphosa", mode="identity")
         
         call_args = memory_with_mocks.neo4j_driver.execute_query.call_args[0][0]
-        assert "memory_identity_embeddings" in call_args
+        assert "entity_identity_embeddings" in call_args
 
     @pytest.mark.asyncio
     async def test_smart_search_routing(self, memory_with_mocks):
@@ -308,6 +310,37 @@ class TestVectorEnabledNeo4jMemory:
         
         for call in vector_calls:
             assert "1024" in call
+
+    @pytest.mark.asyncio
+    async def test_duplicate_entity_relationship_handling(self, memory_with_mocks):
+        """Test that relationships work correctly even with duplicate entity names"""
+        
+        relations = [Relation(
+            source="DuplicateEntity",
+            target="AnotherEntity", 
+            relationType="CONNECTS_TO"
+        )]
+        
+        # Mock successful database response
+        memory_with_mocks.neo4j_driver.execute_query.return_value = MagicMock()
+        
+        # This should not raise an exception even if there are duplicate entities
+        result = await memory_with_mocks.create_relations(relations)
+        
+        # Check that the relation creation succeeded
+        assert result == relations
+        
+        # Check that the query includes LIMIT 1 clauses to handle duplicates
+        call_args = memory_with_mocks.neo4j_driver.execute_query.call_args[0][0]
+        assert "LIMIT 1" in call_args
+        
+        # Should have two LIMIT 1 clauses (one for source, one for target)
+        limit_count = call_args.count("LIMIT 1")
+        assert limit_count == 2
+        
+        # Check that WITH clauses are used properly
+        assert "WITH from LIMIT 1" in call_args
+        assert "WITH from, to LIMIT 1" in call_args
 
 # Benchmark tests for performance monitoring
 class TestVectorMemoryPerformance:

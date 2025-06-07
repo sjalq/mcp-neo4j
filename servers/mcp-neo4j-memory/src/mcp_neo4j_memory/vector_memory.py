@@ -1,7 +1,8 @@
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import asyncio
 import os
+import re
 
 from sentence_transformers import SentenceTransformer
 import numpy as np
@@ -57,7 +58,7 @@ class VectorEnabledNeo4jMemory:
         try:
             query = """
             CREATE FULLTEXT INDEX search IF NOT EXISTS 
-            FOR (m:Memory) ON EACH [m.name, m.type, m.observations];
+            FOR (m:Entity) ON EACH [m.name, m.type, m.observations]
             """
             self.neo4j_driver.execute_query(query)
             logger.info("Created fulltext search index")
@@ -116,6 +117,32 @@ class VectorEnabledNeo4jMemory:
             "identity_embedding": identity_embedding
         }
 
+    def _sanitize_labels(self, labels: Optional[List[str]]) -> List[str]:
+        """Sanitize and CamelCase labels according to Neo4j rules"""
+        if not labels:
+            return []
+        
+        if len(labels) > 3:
+            raise ValueError("Maximum 3 labels allowed")
+        
+        sanitized = []
+        for label in labels[:3]:  # Max 3 additional labels
+            # Remove special characters and split on common separators
+            cleaned = re.sub(r'[^a-zA-Z0-9_\s]', '', str(label))
+            words = re.split(r'[\s_]+', cleaned)
+            
+            # CamelCase: first letter of each word capitalized, rest lowercase
+            camel_cased = ''.join(word.capitalize() for word in words if word)
+            
+            # Ensure it starts with a letter (Neo4j requirement)
+            if camel_cased and camel_cased[0].isalpha():
+                sanitized.append(camel_cased)
+            elif camel_cased:
+                # If starts with number/underscore, prepend 'Label'
+                sanitized.append(f"Label{camel_cased}")
+        
+        return sanitized
+
     async def create_entities(self, entities: List) -> List:
         """Enhanced entity creation with automatic embedding generation"""
         
@@ -136,29 +163,42 @@ class VectorEnabledNeo4jMemory:
             batch_embeddings.extend(embeddings)
             logger.info(f"Generated embeddings for batch {i//BATCH_SIZE + 1}")
 
-        # Enhanced Cypher query with multiple embeddings
-        query = """
-        UNWIND $entities as entity
-        MERGE (e:Memory { name: entity.name })
-        SET e += entity {
-            .type, 
-            .observations,
-            .content_embedding,
-            .observation_embedding,
-            .identity_embedding
-        }
-        SET e:$(entity.type)
-        SET e.indexed_at = datetime()
-        """
-        
-        # Prepare data with embeddings
-        entities_data = []
+        # Create entities individually with intelligent merging
         for entity, embeddings in zip(entities, batch_embeddings):
-            data = entity.model_dump() if hasattr(entity, 'model_dump') else entity.__dict__
-            data.update(embeddings)
-            entities_data.append(data)
-        
-        self.neo4j_driver.execute_query(query, {"entities": entities_data})
+            # Get labels and sanitize them (required for user-created entities, optional for internal)
+            additional_labels = self._sanitize_labels(entity.labels)
+            
+            # Validate that user-created entities have labels (this should be enforced by MCP schema)
+            if hasattr(entity, 'labels') and entity.labels is not None and not additional_labels:
+                raise ValueError("At least one valid label is required for user-created entities")
+            
+            # MERGE by name and type only, then add Entity base label
+            merge_query = """
+            MERGE (e { name: $name, type: $type })
+            ON CREATE SET e:Entity, e.observations = $observations
+            ON MATCH SET e:Entity, e.observations = e.observations + [obs in $observations WHERE NOT obs IN e.observations]
+            SET e.content_embedding = $content_embedding
+            SET e.observation_embedding = $observation_embedding
+            SET e.identity_embedding = $identity_embedding
+            SET e.indexed_at = datetime()
+            """
+            
+            # Prepare parameters
+            params = {
+                "name": entity.name,
+                "type": entity.type,
+                "observations": entity.observations,
+                **embeddings
+            }
+            
+            self.neo4j_driver.execute_query(merge_query, params)
+            
+            # Add additional labels separately 
+            if additional_labels:
+                for label in additional_labels:
+                    # Dynamic label addition
+                    label_query = f"MATCH (e {{name: $name}}) SET e:{label}"
+                    self.neo4j_driver.execute_query(label_query, {"name": entity.name})
         logger.info(f"Created {len(entities)} entities with embeddings")
         return entities
 
@@ -170,17 +210,23 @@ class VectorEnabledNeo4jMemory:
             context_text = f"{relation.source} {relation.relationType} {relation.target}"
             context_embedding = self.encoder.encode(context_text).tolist()
             
-            query = """
-            MATCH (from:Memory {name: $source}), (to:Memory {name: $target})
-            MERGE (from)-[r:$(relationType)]->(to)
+            # Sanitize relation type for Cypher (remove special chars, spaces)
+            safe_rel_type = re.sub(r'[^a-zA-Z0-9_]', '_', relation.relationType)
+            
+            # Dynamic query with relation type (can't parameterize relationship types in Neo4j)
+            query = f"""
+            MATCH (from:Entity {{name: $source}})
+            WITH from LIMIT 1
+            MATCH (to:Entity {{name: $target}})
+            WITH from, to LIMIT 1
+            MERGE (from)-[r:{safe_rel_type}]->(to)
             SET r.context_embedding = $context_embedding
             SET r.created_at = datetime()
             """
             
             self.neo4j_driver.execute_query(query, {
                 "source": relation.source,
-                "target": relation.target, 
-                "relationType": relation.relationType,
+                "target": relation.target,
                 "context_embedding": context_embedding
             })
         
@@ -200,7 +246,14 @@ class VectorEnabledNeo4jMemory:
         
         # Choose embedding field based on search mode
         embedding_property = SEARCH_MODES.get(mode, "content_embedding")
-        index_name = f"memory_{mode}_embeddings"
+        
+        # Map search modes to actual index names
+        index_mapping = {
+            "content": "entity_content_embeddings",
+            "observations": "entity_observation_embeddings",
+            "identity": "entity_identity_embeddings"
+        }
+        index_name = index_mapping.get(mode, "entity_content_embeddings")
         
         vector_query = f"""
         CALL db.index.vector.queryNodes(
@@ -214,7 +267,7 @@ class VectorEnabledNeo4jMemory:
         ORDER BY score DESC
         
         // Get related entities within 1 hop
-        OPTIONAL MATCH (node)-[r]-(related:Memory)
+        OPTIONAL MATCH (node)-[r]-(related:Entity)
         WHERE id(related) <> id(node)
         
         WITH node, score, 
@@ -301,9 +354,9 @@ class VectorEnabledNeo4jMemory:
     async def migrate_existing_memories(self):
         """Add embeddings to existing memories that lack them"""
         
-        # Find unindexed memories
+        # Find unindexed entities
         query = """
-        MATCH (m:Memory)
+        MATCH (m:Entity)
         WHERE m.content_embedding IS NULL
         RETURN m.name as name, m.type as type, m.observations as observations
         ORDER BY m.name
@@ -343,7 +396,7 @@ class VectorEnabledNeo4jMemory:
         
         query = """
         UNWIND $updates as update
-        MATCH (m:Memory {name: update.name})
+        MATCH (m:Entity {name: update.name})
         SET m.content_embedding = update.content_embedding
         SET m.observation_embedding = update.observation_embedding  
         SET m.identity_embedding = update.identity_embedding
@@ -357,7 +410,7 @@ class VectorEnabledNeo4jMemory:
         
         # Count unindexed items
         count_query = """
-        MATCH (m:Memory)
+        MATCH (m:Entity)
         WHERE m.content_embedding IS NULL
         RETURN count(m) as unindexed_count
         """
@@ -451,7 +504,7 @@ class VectorEnabledNeo4jMemory:
         # First add the observations using standard method
         query = """
         UNWIND $observations as obs  
-        MATCH (e:Memory { name: obs.entityName })
+        MATCH (e:Entity { name: obs.entityName })
         WITH e, [o in obs.contents WHERE NOT o IN e.observations] as new
         SET e.observations = coalesce(e.observations,[]) + new
         RETURN e.name as name, new
@@ -465,7 +518,7 @@ class VectorEnabledNeo4jMemory:
         # Then update embeddings for affected entities
         for obs in observations:
             entity_query = """
-            MATCH (e:Memory { name: $name })
+            MATCH (e:Entity { name: $name })
             RETURN e.name as name, e.type as type, e.observations as observations
             """
             entity_result = self.neo4j_driver.execute_query(entity_query, {"name": obs.entityName})
@@ -483,7 +536,7 @@ class VectorEnabledNeo4jMemory:
                 embeddings = self._generate_embeddings(entity)
                 
                 update_query = """
-                MATCH (e:Memory { name: $name })
+                MATCH (e:Entity { name: $name })
                 SET e.content_embedding = $content_embedding
                 SET e.observation_embedding = $observation_embedding
                 SET e.identity_embedding = $identity_embedding
@@ -502,7 +555,7 @@ class VectorEnabledNeo4jMemory:
         """Delete entities and their embeddings"""
         query = """
         UNWIND $entities as name
-        MATCH (e:Memory { name: name })
+        MATCH (e:Entity { name: name })
         DETACH DELETE e
         """
         
@@ -512,7 +565,7 @@ class VectorEnabledNeo4jMemory:
         """Delete observations and update embeddings"""
         query = """
         UNWIND $deletions as d  
-        MATCH (e:Memory { name: d.entityName })
+        MATCH (e:Entity { name: d.entityName })
         SET e.observations = [o in coalesce(e.observations,[]) WHERE NOT o IN d.observations]
         """
         self.neo4j_driver.execute_query(
@@ -525,7 +578,7 @@ class VectorEnabledNeo4jMemory:
         # Update embeddings for affected entities
         for deletion in deletions:
             entity_query = """
-            MATCH (e:Memory { name: $name })
+            MATCH (e:Entity { name: $name })
             RETURN e.name as name, e.type as type, e.observations as observations
             """
             entity_result = self.neo4j_driver.execute_query(entity_query, {"name": deletion.entityName})
@@ -543,7 +596,7 @@ class VectorEnabledNeo4jMemory:
                 embeddings = self._generate_embeddings(entity)
                 
                 update_query = """
-                MATCH (e:Memory { name: $name })
+                MATCH (e:Entity { name: $name })
                 SET e.content_embedding = $content_embedding
                 SET e.observation_embedding = $observation_embedding
                 SET e.identity_embedding = $identity_embedding
@@ -557,14 +610,21 @@ class VectorEnabledNeo4jMemory:
 
     async def delete_relations(self, relations: List) -> None:
         """Delete relations"""
-        query = """
-        UNWIND $relations as relation
-        MATCH (source:Memory)-[r:$(relation.relationType)]->(target:Memory)
-        WHERE source.name = relation.source
-        AND target.name = relation.target
-        DELETE r
-        """
-        self.neo4j_driver.execute_query(
-            query, 
-            {"relations": [relation.model_dump() if hasattr(relation, 'model_dump') else relation.__dict__ for relation in relations]}
-        ) 
+        for relation in relations:
+            # Sanitize relation type for Cypher (remove special chars, spaces)
+            safe_rel_type = re.sub(r'[^a-zA-Z0-9_]', '_', relation.relationType)
+            
+            # Dynamic query with relation type (can't parameterize relationship types in Neo4j)
+            query = f"""
+            MATCH (source:Entity {{name: $source}})
+            WITH source LIMIT 1
+            MATCH (target:Entity {{name: $target}})
+            WITH source, target LIMIT 1
+            MATCH (source)-[r:{safe_rel_type}]->(target)
+            DELETE r
+            """
+            
+            self.neo4j_driver.execute_query(query, {
+                "source": relation.source,
+                "target": relation.target
+            }) 

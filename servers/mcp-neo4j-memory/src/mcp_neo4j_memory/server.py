@@ -24,6 +24,7 @@ class Entity(BaseModel):
     name: str
     type: str
     observations: List[str]
+    labels: Optional[List[str]] = None
 
 class Relation(BaseModel):
     source: str
@@ -97,8 +98,15 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
                                         "items": {"type": "string"},
                                         "description": "An array of observation contents associated with the entity"
                                     },
+                                    "labels": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "minItems": 1,
+                                        "maxItems": 3,
+                                        "description": "Required array of 1-3 labels for multi-dimensional categorization of entities. Use labels to add meaningful dimensions beyond the primary type, such as: status/state, roles/relationships, qualities/characteristics, categories/domains, or temporal aspects. Labels can represent completely independent dimensions. Examples: ['Important', 'Blue'] for something significant that's blue, ['Work', 'Stressful'] for a job-related stressor, ['Family', 'Expensive'] for a costly family matter, ['Daily', 'Favorite'] for a beloved routine, ['Private', 'Ongoing'] for a personal current situation, ['Learning', 'Difficult'] for a challenging skill. Labels will be automatically CamelCased and sanitized for Neo4j compatibility."
+                                    },
                                 },
-                                "required": ["name", "type", "observations"],
+                                "required": ["name", "type", "observations", "labels"],
                             },
                         },
                     },
