@@ -1,14 +1,32 @@
 .env
+.env.*
+!.env.example
+
 # See http://help.github.com/ignore-files/ for more about ignoring files.
 
 # compiled output
 dist
 tmp
 /out-tsc
+build/
+*.egg-info/
 
 # dependencies
 node_modules
 __pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Python virtual environments
+.venv
+venv/
+env/
+ENV/
+
+# UV package manager
+.uv_cache/
+
 # IDEs and editors
 /.idea
 .project
@@ -18,15 +36,50 @@ __pycache__
 .settings/
 *.sublime-workspace
 
-# python venc
-.venv
-
 # IDE - VSCode
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+
+# Python testing
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+htmlcov/
+.tox/
+.nox/
+
+# Python profiling
+.prof
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# Docker
+*.log
+.docker/
+
+# Benchmarks
+.benchmarks/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
 
 # misc
 /.sass-cache
@@ -44,4 +97,17 @@ Thumbs.db
 
 .nx/cache
 .nx/workspace-data
-__pycache__
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Log files
+*.log
+logs/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3

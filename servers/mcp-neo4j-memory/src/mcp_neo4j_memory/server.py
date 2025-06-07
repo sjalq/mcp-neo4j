@@ -13,6 +13,8 @@ from mcp.server import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 import mcp.server.stdio
 
+from .vector_memory import VectorEnabledNeo4jMemory
+
 # Set up logging
 logger = logging.getLogger('mcp_neo4j_memory')
 logger.setLevel(logging.INFO)
@@ -215,8 +217,8 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
         logger.error(f"Failed to connect to Neo4j: {e}")
         exit(1)
 
-    # Initialize memory
-    memory = Neo4jMemory(neo4j_driver)
+    # Initialize memory with vector capabilities
+    memory = VectorEnabledNeo4jMemory(neo4j_driver)
     
     # Create MCP server
     server = Server("mcp-neo4j-memory")
@@ -410,6 +412,25 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
                     "required": ["names"],
                 },
             ),
+            types.Tool(
+                name="vector_search",
+                description="Semantic vector search across the knowledge graph using BGE-large embeddings",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "The semantic search query"},
+                        "mode": {
+                            "type": "string", 
+                            "enum": ["content", "observations", "identity"],
+                            "description": "Search mode: content (full context), observations (behavior/facts), identity (name/type)",
+                            "default": "content"
+                        },
+                        "limit": {"type": "integer", "description": "Maximum number of results to return", "default": 10},
+                        "threshold": {"type": "number", "description": "Similarity threshold (0.0-1.0)", "default": 0.7}
+                    },
+                    "required": ["query"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -459,6 +480,15 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
                 
             elif name == "find_nodes" or name == "open_nodes":
                 result = await memory.find_nodes(arguments.get("names", []))
+                return [types.TextContent(type="text", text=json.dumps(result.model_dump(), indent=2))]
+                
+            elif name == "vector_search":
+                result = await memory.vector_search(
+                    query=arguments.get("query", ""),
+                    mode=arguments.get("mode", "content"),
+                    limit=arguments.get("limit", 10),
+                    threshold=arguments.get("threshold", 0.7)
+                )
                 return [types.TextContent(type="text", text=json.dumps(result.model_dump(), indent=2))]
                 
             else:
