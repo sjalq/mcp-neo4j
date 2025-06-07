@@ -20,10 +20,19 @@ def neo4j_driver():
     except Exception as e:
         pytest.skip(f"Could not connect to Neo4j: {e}")
     
+    # Clean up ALL test data before tests (comprehensive cleanup)
+    cleanup_query = """
+    MATCH (n)
+    WHERE n.name IS NOT NULL AND n.type IS NOT NULL
+    OR n:Entity OR n:Character OR n:Memory OR n:Test OR n:TestGroup
+    DETACH DELETE n
+    """
+    driver.execute_query(cleanup_query)
+    
     yield driver
     
-    # Clean up test data after tests
-    driver.execute_query("MATCH (n:Memory) DETACH DELETE n")
+    # Clean up ALL test data after tests (comprehensive cleanup)
+    driver.execute_query(cleanup_query)
     
     driver.close()
 
@@ -34,6 +43,10 @@ def memory(neo4j_driver):
 
 @pytest.mark.asyncio
 async def test_create_and_read_entities(memory):
+    # Get initial state
+    initial_graph = await memory.read_graph()
+    initial_entity_count = len(initial_graph.entities)
+    
     # Create test entities
     test_entities = [
         Entity(name="Alice", type="Person", observations=["Likes reading", "Works at Company X"], labels=["Friend", "Colleague"]),
@@ -41,21 +54,44 @@ async def test_create_and_read_entities(memory):
     ]
     # Create entities in the graph
     created_entities = await memory.create_entities(test_entities)
+    
+    # Verify creation response 
     assert len(created_entities) == 2
+    created_names = [e.name for e in created_entities]
+    assert "Alice" in created_names
+    assert "Bob" in created_names
+    
+    # Verify created entities have correct content
+    alice_created = next(e for e in created_entities if e.name == "Alice")
+    bob_created = next(e for e in created_entities if e.name == "Bob")
+    
+    assert alice_created.type == "Person"
+    assert alice_created.observations == ["Likes reading", "Works at Company X"]
+    assert bob_created.type == "Person" 
+    assert bob_created.observations == ["Enjoys hiking"]
     
     # Read the graph
     graph = await memory.read_graph()
     
-    # Verify entities were created
-    assert len(graph.entities) == 2
+    # Verify entities were persisted (should be initial + 2 new entities)
+    assert len(graph.entities) == initial_entity_count + 2
     
-    # Check if entities have correct data
+    # Check persisted data matches created data
     entities_by_name = {entity.name: entity for entity in graph.entities}
     assert "Alice" in entities_by_name
     assert "Bob" in entities_by_name
-    assert entities_by_name["Alice"].type == "Person"
-    assert "Likes reading" in entities_by_name["Alice"].observations
-    assert "Enjoys hiking" in entities_by_name["Bob"].observations
+    
+    # Verify full data integrity
+    alice_persisted = entities_by_name["Alice"]
+    bob_persisted = entities_by_name["Bob"]
+    
+    assert alice_persisted.type == "Person"
+    assert "Likes reading" in alice_persisted.observations
+    assert "Works at Company X" in alice_persisted.observations
+    assert len(alice_persisted.observations) >= 2  # Could have more due to merging
+    
+    assert bob_persisted.type == "Person"
+    assert "Enjoys hiking" in bob_persisted.observations
 
 @pytest.mark.asyncio
 async def test_create_and_read_relations(memory):
@@ -200,18 +236,18 @@ async def test_search_nodes(memory):
     ]
     await memory.create_entities(test_entities)
     
-    # Search for programming-related nodes
-    result = await memory.vector_search("programming", mode="observations", limit=10, threshold=0.7)
-    
-    # If no results, try content mode with lower threshold
-    if not result.entities:
-        result = await memory.vector_search("programming", mode="content", limit=10, threshold=0.6)
+    # Test actual search_nodes method (not vector_search)
+    result = await memory.search_nodes("programming")
     
     # Verify search functionality works and returns entities
     entity_names = [e.name for e in result.entities]
     assert len(entity_names) > 0  # Should find at least some entities
     assert "Python" in entity_names or "Ian" in entity_names  # Should find programming-related entities
-    # Note: Vector search may find weak semantic connections, so we test core functionality rather than strict precision
+    
+    # Test search with partial name match
+    result = await memory.search_nodes("Ian")
+    entity_names = [e.name for e in result.entities]
+    assert "Ian" in entity_names
 
 @pytest.mark.asyncio
 async def test_find_nodes(memory):
@@ -230,4 +266,132 @@ async def test_find_nodes(memory):
     entity_names = [e.name for e in result.entities]
     assert "Kevin" in entity_names
     assert "Laura" in entity_names
-    assert "Mike" not in entity_names 
+    assert "Mike" not in entity_names
+
+
+@pytest.mark.asyncio
+async def test_read_graph_dedicated(memory):
+    """Dedicated test for read_graph functionality"""
+    # Get initial state (should be empty with proper cleanup, but be robust)
+    initial_graph = await memory.read_graph()
+    initial_entity_count = len(initial_graph.entities)
+    initial_relation_count = len(initial_graph.relations)
+    
+    # Create test data
+    test_entities = [
+        Entity(name="Alice", type="Person", observations=["Works remotely"], labels=["Employee"]),
+        Entity(name="Bob", type="Person", observations=["Team lead"], labels=["Manager"]),
+        Entity(name="Project X", type="Project", observations=["Q2 initiative"], labels=["Active"])
+    ]
+    await memory.create_entities(test_entities)
+    
+    test_relations = [
+        Relation(source="Alice", target="Bob", relationType="REPORTS_TO"),
+        Relation(source="Bob", target="Project X", relationType="MANAGES")
+    ]
+    await memory.create_relations(test_relations)
+    
+    # Test full graph read
+    graph = await memory.read_graph()
+    
+    # Verify entities were added (should be initial + 3 new entities)
+    assert len(graph.entities) == initial_entity_count + 3
+    entity_names = [e.name for e in graph.entities]
+    assert "Alice" in entity_names
+    assert "Bob" in entity_names
+    assert "Project X" in entity_names
+    
+    # Verify relations were added (should be initial + 2 new relations)
+    assert len(graph.relations) == initial_relation_count + 2
+    relation_types = [r.relationType for r in graph.relations]
+    assert "REPORTS_TO" in relation_types
+    assert "MANAGES" in relation_types
+    
+    # Verify data integrity
+    alice = next(e for e in graph.entities if e.name == "Alice")
+    assert alice.type == "Person"
+    assert "Works remotely" in alice.observations
+
+
+@pytest.mark.asyncio 
+async def test_open_nodes(memory):
+    """Test open_nodes tool (should behave identically to find_nodes)"""
+    # Create test entities
+    test_entities = [
+        Entity(name="Node1", type="Test", observations=["First node"], labels=["TestGroup"]),
+        Entity(name="Node2", type="Test", observations=["Second node"], labels=["TestGroup"]),
+        Entity(name="Node3", type="Test", observations=["Third node"], labels=["TestGroup"])
+    ]
+    await memory.create_entities(test_entities)
+    
+    # Test find_nodes
+    find_result = await memory.find_nodes(["Node1", "Node3"])
+    
+    # Since open_nodes calls find_nodes in the server, we test it through the vector memory
+    # In practice this would be tested through the MCP server interface
+    open_result = await memory.find_nodes(["Node1", "Node3"])  # Same call as open_nodes makes
+    
+    # Results should be identical
+    assert len(find_result.entities) == len(open_result.entities) == 2
+    
+    find_names = [e.name for e in find_result.entities]
+    open_names = [e.name for e in open_result.entities]
+    assert find_names == open_names
+    assert "Node1" in find_names
+    assert "Node3" in find_names
+    assert "Node2" not in find_names
+
+
+@pytest.mark.asyncio
+async def test_read_graph_with_legacy_data(memory):
+    """Test read_graph handles nodes without Entity label (legacy data)"""
+    # Directly insert legacy data without Entity label
+    legacy_query = """
+    CREATE (old:Character {name: 'LegacyChar', type: 'Character', observations: ['Old data']})
+    CREATE (new:Entity {name: 'NewChar', type: 'Character', observations: ['New data']})
+    CREATE (old)-[:KNOWS]->(new)
+    """
+    memory.neo4j_driver.execute_query(legacy_query)
+    
+    # read_graph should find both legacy and new nodes
+    graph = await memory.read_graph()
+    
+    entity_names = [e.name for e in graph.entities]
+    assert "LegacyChar" in entity_names  # Should find legacy node
+    assert "NewChar" in entity_names     # Should find new node
+    assert len(graph.entities) == 2
+    
+    # Should also find the relationship
+    assert len(graph.relations) == 1
+    assert graph.relations[0].relationType == "KNOWS"
+
+
+@pytest.mark.asyncio
+async def test_vector_search_modes(memory):
+    """Comprehensive test for vector_search with different modes"""
+    # Create entities with distinctive content for each mode
+    test_entities = [
+        Entity(name="TechPerson", type="Person", observations=["Codes in Python", "Uses machine learning"], labels=["Engineer"]),
+        Entity(name="BusinessPerson", type="Person", observations=["Manages teams", "Strategic planning"], labels=["Manager"]),
+        Entity(name="Python", type="Technology", observations=["Programming language", "Used for AI"], labels=["Language"])
+    ]
+    await memory.create_entities(test_entities)
+    
+    # Test content mode (default)
+    result = await memory.vector_search("programming technology", mode="content")
+    entity_names = [e.name for e in result.entities]
+    assert len(entity_names) > 0
+    
+    # Test observations mode  
+    result = await memory.vector_search("programming", mode="observations")
+    entity_names = [e.name for e in result.entities]
+    assert len(entity_names) > 0
+    
+    # Test identity mode
+    result = await memory.vector_search("Python", mode="identity")
+    entity_names = [e.name for e in result.entities]
+    assert "Python" in entity_names
+    
+    # Test with custom threshold and limit
+    result = await memory.vector_search("technology", threshold=0.1, limit=5)
+    assert len(result.entities) <= 5

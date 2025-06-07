@@ -492,11 +492,48 @@ class VectorEnabledNeo4jMemory:
 
     async def find_nodes(self, names: List[str]):
         """Find specific nodes by name"""
-        return await self.load_graph("name: (" + " ".join(names) + ")")
+        # Direct query instead of relying on fulltext search
+        query = """
+        MATCH (entity:Entity)
+        WHERE entity.name IN $names
+        OPTIONAL MATCH (entity)-[r]-(other:Entity)
+        RETURN collect(distinct {
+            name: entity.name, 
+            type: entity.type, 
+            observations: entity.observations
+        }) as nodes,
+        collect(distinct {
+            source: startNode(r).name, 
+            target: endNode(r).name, 
+            relationType: type(r)
+        }) as relations
+        """
+        
+        result = self.neo4j_driver.execute_query(query, {"names": names})
+        return self._process_fulltext_results(result)
 
     async def read_graph(self):
-        """Read entire graph"""
-        return await self.load_graph()
+        """Read entire graph - finds all memory entities regardless of label"""
+        # Robust query that finds entities with :Entity label OR memory-like properties
+        query = """
+        MATCH (entity)
+        WHERE entity:Entity OR (entity.name IS NOT NULL AND entity.type IS NOT NULL)
+        OPTIONAL MATCH (entity)-[r]-(other)
+        WHERE other:Entity OR (other.name IS NOT NULL AND other.type IS NOT NULL)
+        RETURN collect(distinct {
+            name: entity.name, 
+            type: entity.type, 
+            observations: coalesce(entity.observations, [])
+        }) as nodes,
+        collect(distinct {
+            source: startNode(r).name, 
+            target: endNode(r).name, 
+            relationType: type(r)
+        }) as relations
+        """
+        
+        result = self.neo4j_driver.execute_query(query)
+        return self._process_fulltext_results(result)
 
     # Delegation methods for other operations
     async def add_observations(self, observations: List):
