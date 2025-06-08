@@ -60,8 +60,9 @@ class TestIntelligentMerge:
         merge_query = merge_call[0][0]
         
         assert "MERGE (e { name: $name, type: $type })" in merge_query
-        assert "ON CREATE SET e:Entity" in merge_query
-        assert "ON MATCH SET e:Entity" in merge_query
+        # Should NOT set Entity label for entities with custom labels
+        assert "ON CREATE SET e:Entity" not in merge_query
+        assert "ON MATCH SET e:Entity" not in merge_query
         
         # Should have label addition calls
         label_calls = [call for call in calls if "SET e:Blockchain" in str(call) or "SET e:Technology" in str(call)]
@@ -83,7 +84,8 @@ class TestIntelligentMerge:
         
         # Should still MERGE by name and type
         assert "MERGE (e { name: $name, type: $type })" in merge_query
-        assert "ON MATCH SET e:Entity" in merge_query
+        # Should NOT set Entity label for entities with custom labels
+        assert "ON MATCH SET e:Entity" not in merge_query
         
         # Should combine observations
         assert "e.observations + [obs in $observations WHERE NOT obs IN e.observations]" in merge_query
@@ -201,14 +203,16 @@ class TestIntelligentMerge:
         relation = Relation(source="Alice", target="Bob", relationType="WORKS_WITH")
         await vector_memory.create_relations([relation])
         
-        # Verify relation creation uses Entity label with duplicate handling
+        # Verify relation creation finds nodes regardless of labels
         calls = mock_neo4j_driver.execute_query.call_args_list
         relation_call = calls[0]
         relation_query = relation_call[0][0]
         
-        assert "MATCH (from:Entity {name: $source})" in relation_query
+        assert "MATCH (from {name: $source})" in relation_query
+        assert "WHERE from:Entity OR (from.name IS NOT NULL AND from.type IS NOT NULL)" in relation_query
         assert "WITH from LIMIT 1" in relation_query
-        assert "MATCH (to:Entity {name: $target})" in relation_query
+        assert "MATCH (to {name: $target})" in relation_query
+        assert "WHERE to:Entity OR (to.name IS NOT NULL AND to.type IS NOT NULL)" in relation_query
         assert "WITH from, to LIMIT 1" in relation_query
         assert "MERGE (from)-[r:WORKS_WITH]->(to)" in relation_query
 
@@ -231,17 +235,18 @@ class TestIntelligentMerge:
             assert ":Memory" not in query, f"Found Memory label in query: {query}"
             assert "Memory" not in query or "Memory" in ["VectorEnabledNeo4jMemory", "memory"], f"Unexpected Memory reference: {query}"
 
-    async def test_entity_base_label_always_present(self, vector_memory, mock_neo4j_driver):
-        """Test that Entity base label is always added"""
+    async def test_entity_label_only_when_no_custom_labels(self, vector_memory, mock_neo4j_driver):
+        """Test that Entity label is only added when no custom labels are provided"""
         
-        entity = Entity(
-            name="TestEntity", 
+        # Test 1: Entity with custom labels should NOT get Entity label
+        entity_with_labels = Entity(
+            name="TestEntityCustom", 
             type="Test",
             observations=["Test"],
             labels=["Custom"]
         )
         
-        await vector_memory.create_entities([entity])
+        await vector_memory.create_entities([entity_with_labels])
         
         calls = mock_neo4j_driver.execute_query.call_args_list
         merge_calls = [call for call in calls if "MERGE" in str(call)]
@@ -249,5 +254,27 @@ class TestIntelligentMerge:
         merge_call = merge_calls[0]
         merge_query = merge_call[0][0]
         
-        # Should set Entity label
-        assert "SET e:Entity" in merge_query 
+        # Should NOT set Entity label for entities with custom labels
+        assert "SET e:Entity" not in merge_query
+        
+        # Reset mock for second test
+        mock_neo4j_driver.execute_query.reset_mock()
+        
+        # Test 2: Entity without custom labels should get Entity label
+        entity_without_labels = Entity(
+            name="TestEntityNoLabels", 
+            type="Test",
+            observations=["Test"],
+            labels=None
+        )
+        
+        await vector_memory.create_entities([entity_without_labels])
+        
+        calls = mock_neo4j_driver.execute_query.call_args_list
+        merge_calls = [call for call in calls if "MERGE" in str(call)]
+        assert len(merge_calls) > 0, "No MERGE queries found"
+        merge_call = merge_calls[0]
+        merge_query = merge_call[0][0]
+        
+        # Should set Entity label for entities without custom labels
+        assert "ON CREATE SET e:Entity" in merge_query 

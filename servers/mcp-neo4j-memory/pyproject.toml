@@ -32,3 +32,4 @@ mcp-neo4j-memory = "mcp_neo4j_memory:main"
 pythonpath = [
   "src"
 ]
+asyncio_mode = "auto"

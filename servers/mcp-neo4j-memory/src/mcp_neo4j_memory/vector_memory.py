@@ -93,8 +93,9 @@ class VectorEnabledNeo4jMemory:
             self._create_vector_index(**index_config)
 
     def _create_vector_index(self, name: str, label: str, property: str):
-        """Create a single vector index"""
+        """Create a single vector index that works with any memory node"""
         try:
+            # Create index for Entity label (for backward compatibility)
             query = f"""
             CREATE VECTOR INDEX {name} IF NOT EXISTS
             FOR (m:{label}) 
@@ -108,6 +109,10 @@ class VectorEnabledNeo4jMemory:
             """
             self.neo4j_driver.execute_query(query)
             logger.info(f"Created vector index: {name}")
+            
+            # Note: Neo4j doesn't support WHERE clauses in vector index creation
+            # We'll handle this by ensuring all memory nodes get Entity label for indexing
+            
         except neo4j.exceptions.ClientError as e:
             if "already exists" in str(e):
                 logger.info(f"Vector index {name} already exists")
@@ -184,38 +189,49 @@ class VectorEnabledNeo4jMemory:
 
         # Create entities individually with intelligent merging
         for entity, embeddings in zip(entities, batch_embeddings):
-            # Get labels and sanitize them (required for user-created entities, optional for internal)
+            # Get labels and sanitize them (optional for all entities now)
             additional_labels = self._sanitize_labels(entity.labels)
             
-            # Validate that user-created entities have labels (this should be enforced by MCP schema)
-            if hasattr(entity, 'labels') and entity.labels is not None and not additional_labels:
-                raise ValueError("At least one valid label is required for user-created entities")
-            
-            # MERGE by name and type only, then add Entity base label
-            merge_query = """
-            MERGE (e { name: $name, type: $type })
-            ON CREATE SET e:Entity, e.observations = $observations
-            ON MATCH SET e:Entity, e.observations = e.observations + [obs in $observations WHERE NOT obs IN e.observations]
-            SET e.content_embedding = $content_embedding
-            SET e.observation_embedding = $observation_embedding
-            SET e.identity_embedding = $identity_embedding
-            SET e.indexed_at = datetime()
-            """
-            
-            # Prepare parameters
-            params = {
-                "name": entity.name,
-                "type": entity.type,
-                "observations": entity.observations,
-                **embeddings
-            }
+            # Always add Entity label for indexing, track user's intended labels
+            if additional_labels:
+                merge_query = """
+                MERGE (e { name: $name, type: $type })
+                ON CREATE SET e:Entity, e.observations = $observations, e.user_labels = $user_labels
+                ON MATCH SET e.observations = e.observations + [obs in $observations WHERE NOT obs IN e.observations], e.user_labels = $user_labels
+                SET e.content_embedding = $content_embedding
+                SET e.observation_embedding = $observation_embedding
+                SET e.identity_embedding = $identity_embedding
+                SET e.indexed_at = datetime()
+                """
+                params = {
+                    "name": entity.name,
+                    "type": entity.type,
+                    "observations": entity.observations,
+                    "user_labels": additional_labels,
+                    **embeddings
+                }
+            else:
+                merge_query = """
+                MERGE (e { name: $name, type: $type })
+                ON CREATE SET e:Entity, e.observations = $observations
+                ON MATCH SET e.observations = e.observations + [obs in $observations WHERE NOT obs IN e.observations]
+                SET e.content_embedding = $content_embedding
+                SET e.observation_embedding = $observation_embedding
+                SET e.identity_embedding = $identity_embedding
+                SET e.indexed_at = datetime()
+                """
+                params = {
+                    "name": entity.name,
+                    "type": entity.type,
+                    "observations": entity.observations,
+                    **embeddings
+                }
             
             self.neo4j_driver.execute_query(merge_query, params)
             
-            # Add additional labels separately 
+            # Add custom labels if provided
             if additional_labels:
                 for label in additional_labels:
-                    # Dynamic label addition
                     label_query = f"MATCH (e {{name: $name}}) SET e:{label}"
                     self.neo4j_driver.execute_query(label_query, {"name": entity.name})
         logger.info(f"Created {len(entities)} entities with embeddings")
@@ -233,10 +249,13 @@ class VectorEnabledNeo4jMemory:
             safe_rel_type = re.sub(r'[^a-zA-Z0-9_]', '_', relation.relationType)
             
             # Dynamic query with relation type (can't parameterize relationship types in Neo4j)
+            # Find nodes by name regardless of labels (Entity or custom labels)
             query = f"""
-            MATCH (from:Entity {{name: $source}})
+            MATCH (from {{name: $source}})
+            WHERE from:Entity OR (from.name IS NOT NULL AND from.type IS NOT NULL)
             WITH from LIMIT 1
-            MATCH (to:Entity {{name: $target}})
+            MATCH (to {{name: $target}})
+            WHERE to:Entity OR (to.name IS NOT NULL AND to.type IS NOT NULL)
             WITH from, to LIMIT 1
             MERGE (from)-[r:{safe_rel_type}]->(to)
             SET r.context_embedding = $context_embedding
@@ -285,9 +304,10 @@ class VectorEnabledNeo4jMemory:
         WITH node, score
         ORDER BY score DESC
         
-        // Get related entities within 1 hop
-        OPTIONAL MATCH (node)-[r]-(related:Entity)
-        WHERE id(related) <> id(node)
+        // Get related entities within 1 hop (any memory node)
+        OPTIONAL MATCH (node)-[r]-(related)
+        WHERE id(related) <> id(node) 
+        AND (related:Entity OR (related.name IS NOT NULL AND related.type IS NOT NULL))
         
         WITH node, score, 
              collect(DISTINCT related)[0..5] as related_nodes,
@@ -496,6 +516,40 @@ class VectorEnabledNeo4jMemory:
         
         return KnowledgeGraph(entities=entities, relations=relations)
 
+    def _process_graph_results_with_labels(self, result):
+        """Process graph results with user-intended labels"""
+        from .server import Entity, Relation, KnowledgeGraph
+        
+        if not result.records:
+            return KnowledgeGraph(entities=[], relations=[])
+        
+        record = result.records[0]
+        nodes = record.get('nodes')
+        rels = record.get('relations')
+        
+        entities = []
+        for node in nodes:
+            if node.get('name'):
+                user_labels = node.get('user_labels', [])
+                entity = Entity(
+                    name=node.get('name'),
+                    type=node.get('type'),
+                    observations=node.get('observations', []),
+                    labels=user_labels if user_labels else None
+                )
+                entities.append(entity)
+        
+        relations = [
+            Relation(
+                source=rel.get('source'),
+                target=rel.get('target'),
+                relationType=rel.get('relationType')
+            )
+            for rel in rels if rel.get('source') and rel.get('target') and rel.get('relationType')
+        ]
+        
+        return KnowledgeGraph(entities=entities, relations=relations)
+
     async def search_nodes(self, query: str):
         """Enhanced search that tries vector first, fallback to fulltext"""
         try:
@@ -511,11 +565,12 @@ class VectorEnabledNeo4jMemory:
 
     async def find_nodes(self, names: List[str]):
         """Find specific nodes by name"""
-        # Direct query instead of relying on fulltext search
+        # Direct query that finds nodes regardless of labels
         query = """
-        MATCH (entity:Entity)
-        WHERE entity.name IN $names
-        OPTIONAL MATCH (entity)-[r]-(other:Entity)
+        MATCH (entity)
+        WHERE entity.name IN $names AND (entity:Entity OR (entity.name IS NOT NULL AND entity.type IS NOT NULL))
+        OPTIONAL MATCH (entity)-[r]-(other)
+        WHERE other:Entity OR (other.name IS NOT NULL AND other.type IS NOT NULL)
         RETURN collect(distinct {
             name: entity.name, 
             type: entity.type, 
@@ -542,7 +597,8 @@ class VectorEnabledNeo4jMemory:
         RETURN collect(distinct {
             name: entity.name, 
             type: entity.type, 
-            observations: coalesce(entity.observations, [])
+            observations: coalesce(entity.observations, []),
+            user_labels: coalesce(entity.user_labels, [])
         }) as nodes,
         collect(distinct {
             source: startNode(r).name, 
@@ -552,7 +608,7 @@ class VectorEnabledNeo4jMemory:
         """
         
         result = self.neo4j_driver.execute_query(query)
-        return self._process_fulltext_results(result)
+        return self._process_graph_results_with_labels(result)
 
     # Delegation methods for other operations
     async def add_observations(self, observations: List):
@@ -560,7 +616,8 @@ class VectorEnabledNeo4jMemory:
         # First add the observations using standard method
         query = """
         UNWIND $observations as obs  
-        MATCH (e:Entity { name: obs.entityName })
+        MATCH (e { name: obs.entityName })
+        WHERE e:Entity OR (e.name IS NOT NULL AND e.type IS NOT NULL)
         WITH e, [o in obs.contents WHERE NOT o IN e.observations] as new
         SET e.observations = coalesce(e.observations,[]) + new
         RETURN e.name as name, new
@@ -574,7 +631,8 @@ class VectorEnabledNeo4jMemory:
         # Then update embeddings for affected entities
         for obs in observations:
             entity_query = """
-            MATCH (e:Entity { name: $name })
+            MATCH (e { name: $name })
+            WHERE e:Entity OR (e.name IS NOT NULL AND e.type IS NOT NULL)
             RETURN e.name as name, e.type as type, e.observations as observations
             """
             entity_result = self.neo4j_driver.execute_query(entity_query, {"name": obs.entityName})
@@ -592,7 +650,8 @@ class VectorEnabledNeo4jMemory:
                 embeddings = self._generate_embeddings(entity)
                 
                 update_query = """
-                MATCH (e:Entity { name: $name })
+                MATCH (e { name: $name })
+                WHERE e:Entity OR (e.name IS NOT NULL AND e.type IS NOT NULL)
                 SET e.content_embedding = $content_embedding
                 SET e.observation_embedding = $observation_embedding
                 SET e.identity_embedding = $identity_embedding
@@ -611,7 +670,8 @@ class VectorEnabledNeo4jMemory:
         """Delete entities and their embeddings"""
         query = """
         UNWIND $entities as name
-        MATCH (e:Entity { name: name })
+        MATCH (e { name: name })
+        WHERE e:Entity OR (e.name IS NOT NULL AND e.type IS NOT NULL)
         DETACH DELETE e
         """
         
@@ -621,7 +681,8 @@ class VectorEnabledNeo4jMemory:
         """Delete observations and update embeddings"""
         query = """
         UNWIND $deletions as d  
-        MATCH (e:Entity { name: d.entityName })
+        MATCH (e { name: d.entityName })
+        WHERE e:Entity OR (e.name IS NOT NULL AND e.type IS NOT NULL)
         SET e.observations = [o in coalesce(e.observations,[]) WHERE NOT o IN d.observations]
         """
         self.neo4j_driver.execute_query(
@@ -634,7 +695,8 @@ class VectorEnabledNeo4jMemory:
         # Update embeddings for affected entities
         for deletion in deletions:
             entity_query = """
-            MATCH (e:Entity { name: $name })
+            MATCH (e { name: $name })
+            WHERE e:Entity OR (e.name IS NOT NULL AND e.type IS NOT NULL)
             RETURN e.name as name, e.type as type, e.observations as observations
             """
             entity_result = self.neo4j_driver.execute_query(entity_query, {"name": deletion.entityName})
@@ -652,7 +714,8 @@ class VectorEnabledNeo4jMemory:
                 embeddings = self._generate_embeddings(entity)
                 
                 update_query = """
-                MATCH (e:Entity { name: $name })
+                MATCH (e { name: $name })
+                WHERE e:Entity OR (e.name IS NOT NULL AND e.type IS NOT NULL)
                 SET e.content_embedding = $content_embedding
                 SET e.observation_embedding = $observation_embedding
                 SET e.identity_embedding = $identity_embedding
@@ -672,9 +735,11 @@ class VectorEnabledNeo4jMemory:
             
             # Dynamic query with relation type (can't parameterize relationship types in Neo4j)
             query = f"""
-            MATCH (source:Entity {{name: $source}})
+            MATCH (source {{name: $source}})
+            WHERE source:Entity OR (source.name IS NOT NULL AND source.type IS NOT NULL)
             WITH source LIMIT 1
-            MATCH (target:Entity {{name: $target}})
+            MATCH (target {{name: $target}})
+            WHERE target:Entity OR (target.name IS NOT NULL AND target.type IS NOT NULL)
             WITH source, target LIMIT 1
             MATCH (source)-[r:{safe_rel_type}]->(target)
             DELETE r

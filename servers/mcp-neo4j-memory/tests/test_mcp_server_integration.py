@@ -1,13 +1,15 @@
 import os
 import pytest
+import pytest_asyncio
 import json
 import asyncio
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from neo4j import GraphDatabase
 
 import mcp.types as types
 from mcp_neo4j_memory.server import main, Entity, Relation
 from mcp_neo4j_memory.vector_memory import VectorEnabledNeo4jMemory
+from mcp.server import Server
 
 @pytest.fixture(scope="function")
 def neo4j_driver():
@@ -23,11 +25,11 @@ def neo4j_driver():
     except Exception as e:
         pytest.skip(f"Could not connect to Neo4j: {e}")
     
-    # Clean up before tests
+    # Clean up before tests - SAFE: Only delete test data with specific patterns
     cleanup_query = """
     MATCH (n)
-    WHERE n.name IS NOT NULL AND n.type IS NOT NULL
-    OR n:Entity OR n:Character OR n:Memory OR n:Test OR n:TestGroup
+    WHERE (n:Test OR n:TestGroup OR n:Character)
+    OR (n.name IS NOT NULL AND (n.name STARTS WITH 'Test' OR n.name STARTS WITH 'Concurrent' OR n.name STARTS WITH 'Special' OR n.name STARTS WITH 'Alice' OR n.name STARTS WITH 'Bob' OR n.name STARTS WITH 'Entity' OR n.name STARTS WITH 'DataScientist' OR n.name STARTS WITH 'Designer' OR n.name STARTS WITH 'SpecificEntity' OR n.name STARTS WITH 'ProjectAlpha' OR n.name STARTS WITH 'Sarah'))
     DETACH DELETE n
     """
     driver.execute_query(cleanup_query)
@@ -38,11 +40,10 @@ def neo4j_driver():
     driver.execute_query(cleanup_query)
     driver.close()
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def mcp_server(neo4j_driver):
     """Create an MCP server instance for testing"""
     # Create server with mock streams
-    from mcp.server import Server
     server = Server("mcp-neo4j-memory")
     
     # Initialize memory 
@@ -184,6 +185,16 @@ async def mcp_server(neo4j_driver):
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error: {str(e)}")]
     
+    # Add helper method to simulate MCP call_tool behavior
+    async def call_tool_helper(name: str, arguments: dict):
+        return await handle_call_tool(name, arguments)
+    
+    # Add helper method to get tools list
+    async def get_tools_list():
+        return await handle_list_tools()
+    
+    server.call_tool_helper = call_tool_helper
+    server.get_tools_list = get_tools_list
     return server
 
 class TestMCPServerIntegration:
@@ -206,7 +217,7 @@ class TestMCPServerIntegration:
         }
         
         # Call MCP tool directly (simulating Agent call)
-        response = await mcp_server.call_tool("create_entities", agent_input)
+        response = await mcp_server.call_tool_helper("create_entities", agent_input)
         
         # Verify response format that Agent receives
         assert len(response) == 1
@@ -224,7 +235,7 @@ class TestMCPServerIntegration:
         assert entity["type"] == "Person"
         assert "Observation 1" in entity["observations"]
         assert "Observation 2" in entity["observations"]
-        assert entity["labels"] is None  # Labels not returned in current implementation
+        assert entity["labels"] == ["Test", "Agent"]  # Labels are returned in current implementation
 
     @pytest.mark.asyncio 
     async def test_read_graph_mcp_json_flow(self, mcp_server):
@@ -248,10 +259,10 @@ class TestMCPServerIntegration:
             ]
         }
         
-        await mcp_server.call_tool("create_entities", create_input)
+        await mcp_server.call_tool_helper("create_entities", create_input)
         
         # Read graph through MCP (no arguments needed)
-        response = await mcp_server.call_tool("read_graph", {})
+        response = await mcp_server.call_tool_helper("read_graph", {})
         
         # Verify response format
         assert len(response) == 1
@@ -285,7 +296,7 @@ class TestMCPServerIntegration:
             ]
         }
         
-        response = await mcp_server.call_tool("create_entities", invalid_input)
+        response = await mcp_server.call_tool_helper("create_entities", invalid_input)
         
         # Should return error message, not crash
         assert len(response) == 1
@@ -301,7 +312,7 @@ class TestMCPServerIntegration:
             "wrong_key": "wrong_value"
         }
         
-        response = await mcp_server.call_tool("create_entities", invalid_input)
+        response = await mcp_server.call_tool_helper("create_entities", invalid_input)
         
         # Should handle gracefully
         assert len(response) == 1
@@ -312,7 +323,7 @@ class TestMCPServerIntegration:
     async def test_mcp_tool_list_functionality(self, mcp_server):
         """Test that MCP server properly lists available tools for Agent"""
         
-        tools = await mcp_server.list_tools()
+        tools = await mcp_server.get_tools_list()
         
         # Verify tool list structure
         assert isinstance(tools, list)
@@ -351,7 +362,7 @@ class TestMCPServerIntegration:
             ]
         }
         
-        response = await mcp_server.call_tool("create_entities", special_input)
+        response = await mcp_server.call_tool_helper("create_entities", special_input)
         
         # Should handle special characters properly
         assert len(response) == 1
@@ -374,7 +385,7 @@ class TestMCPServerIntegration:
             ]
         }
         
-        response = await mcp_server.call_tool("create_entities", large_input)
+        response = await mcp_server.call_tool_helper("create_entities", large_input)
         
         # Should handle larger batches
         assert len(response) == 1
@@ -397,7 +408,7 @@ class TestMCPServerIntegration:
                     }
                 ]
             }
-            return await mcp_server.call_tool("create_entities", input_data)
+            return await mcp_server.call_tool_helper("create_entities", input_data)
         
         # Run concurrent requests
         responses = await asyncio.gather(*[create_entity(i) for i in range(5)])
@@ -411,7 +422,7 @@ class TestMCPServerIntegration:
             assert len(data) == 1
         
         # Verify all entities were created
-        graph_response = await mcp_server.call_tool("read_graph", {})
+        graph_response = await mcp_server.call_tool_helper("read_graph", {})
         graph_data = json.loads(graph_response[0].text)
         concurrent_entities = [e for e in graph_data["entities"] if e["type"] == "Concurrent"]
         assert len(concurrent_entities) == 5
@@ -439,11 +450,11 @@ async def test_realistic_agent_workflow(mcp_server):
         ]
     }
     
-    create_response = await mcp_server.call_tool("create_entities", project_data)
+    create_response = await mcp_server.call_tool_helper("create_entities", project_data)
     assert "Error:" not in create_response[0].text
     
     # 2. Agent reads back the graph to verify
-    read_response = await mcp_server.call_tool("read_graph", {})
+    read_response = await mcp_server.call_tool_helper("read_graph", {})
     graph_data = json.loads(read_response[0].text)
     
     # 3. Agent verifies the data is as expected
@@ -479,7 +490,7 @@ async def test_realistic_agent_workflow(mcp_server):
                 }
             ]
         }
-        await mcp_server.call_tool("create_entities", entities_input)
+        await mcp_server.call_tool_helper("create_entities", entities_input)
         
         # Create relations through MCP
         relations_input = {
@@ -492,7 +503,7 @@ async def test_realistic_agent_workflow(mcp_server):
             ]
         }
         
-        response = await mcp_server.call_tool("create_relations", relations_input)
+        response = await mcp_server.call_tool_helper("create_relations", relations_input)
         
         # Verify response format
         assert len(response) == 1
@@ -525,7 +536,7 @@ async def test_realistic_agent_workflow(mcp_server):
                 }
             ]
         }
-        await mcp_server.call_tool("create_entities", entity_input)
+        await mcp_server.call_tool_helper("create_entities", entity_input)
         
         # Add observations through MCP
         observations_input = {
@@ -537,7 +548,7 @@ async def test_realistic_agent_workflow(mcp_server):
             ]
         }
         
-        response = await mcp_server.call_tool("add_observations", observations_input)
+        response = await mcp_server.call_tool_helper("add_observations", observations_input)
         
         # Verify response format
         assert len(response) == 1
@@ -571,14 +582,14 @@ async def test_realistic_agent_workflow(mcp_server):
                 }
             ]
         }
-        await mcp_server.call_tool("create_entities", entities_input)
+        await mcp_server.call_tool_helper("create_entities", entities_input)
         
         # Search through MCP
         search_input = {
             "query": "machine learning"
         }
         
-        response = await mcp_server.call_tool("search_nodes", search_input)
+        response = await mcp_server.call_tool_helper("search_nodes", search_input)
         
         # Verify response format
         assert len(response) == 1
@@ -620,14 +631,14 @@ async def test_realistic_agent_workflow(mcp_server):
                 }
             ]
         }
-        await mcp_server.call_tool("create_entities", entities_input)
+        await mcp_server.call_tool_helper("create_entities", entities_input)
         
         # Find specific nodes through MCP
         find_input = {
             "names": ["SpecificEntity1", "SpecificEntity3"]
         }
         
-        response = await mcp_server.call_tool("find_nodes", find_input)
+        response = await mcp_server.call_tool_helper("find_nodes", find_input)
         
         # Verify response format
         assert len(response) == 1

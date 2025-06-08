@@ -14,6 +14,11 @@ from mcp.server.models import InitializationOptions
 import mcp.server.stdio
 
 from .vector_memory import VectorEnabledNeo4jMemory
+from .compatibility import (
+    get_array_constraints, get_enum_constraint, get_default_value,
+    get_empty_object_properties, get_description, apply_vector_search_defaults,
+    validate_labels, validate_vector_search_mode, validate_vector_search_params
+)
 
 # Set up logging
 logger = logging.getLogger('mcp_neo4j_memory')
@@ -101,12 +106,15 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
                                     "labels": {
                                         "type": "array",
                                         "items": {"type": "string"},
-                                        "minItems": 1,
-                                        "maxItems": 3,
-                                        "description": "Required array of 1-3 labels for multi-dimensional categorization of entities. Use labels to add meaningful dimensions beyond the primary type, such as: status/state, roles/relationships, qualities/characteristics, categories/domains, or temporal aspects. Labels can represent completely independent dimensions. Examples: ['Important', 'Blue'] for something significant that's blue, ['Work', 'Stressful'] for a job-related stressor, ['Family', 'Expensive'] for a costly family matter, ['Daily', 'Favorite'] for a beloved routine, ['Private', 'Ongoing'] for a personal current situation, ['Learning', 'Difficult'] for a challenging skill. Labels will be automatically CamelCased and sanitized for Neo4j compatibility."
+                                        **get_array_constraints("labels", min_items=0, max_items=3),
+                                        "description": get_description(
+                                            "labels",
+                                            "Optional array of 0-3 labels for multi-dimensional categorization of entities. If no labels provided, Entity label will be used as fallback. Use labels to add meaningful dimensions beyond the primary type, such as: status/state, roles/relationships, qualities/characteristics, categories/domains, or temporal aspects. Labels can represent completely independent dimensions. Examples: ['Important', 'Blue'] for something significant that's blue, ['Work', 'Stressful'] for a job-related stressor, ['Family', 'Expensive'] for a costly family matter, ['Daily', 'Favorite'] for a beloved routine, ['Private', 'Ongoing'] for a personal current situation, ['Learning', 'Difficult'] for a challenging skill. Labels will be automatically CamelCased and sanitized for Neo4j compatibility.",
+                                            constraints="0-3 items optional"
+                                        )
                                     },
                                 },
-                                "required": ["name", "type", "observations", "labels"],
+                                "required": ["name", "type", "observations"],
                             },
                         },
                     },
@@ -228,7 +236,7 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
                 description="Read the entire knowledge graph",
                 inputSchema={
                     "type": "object",
-                    "properties": {},
+                    "properties": get_empty_object_properties(),
                 },
             ),
             types.Tool(
@@ -281,12 +289,33 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
                         "query": {"type": "string", "description": "The semantic search query"},
                         "mode": {
                             "type": "string", 
-                            "enum": ["content", "observations", "identity"],
-                            "description": "Search mode: content (full context), observations (behavior/facts), identity (name/type)",
-                            "default": "content"
+                            **get_enum_constraint(["content", "observations", "identity"]),
+                            "description": get_description(
+                                "mode",
+                                "Search mode: content (full context), observations (behavior/facts), identity (name/type)",
+                                options=["content", "observations", "identity"],
+                                default="content"
+                            ),
+                            **get_default_value("mode", "content")
                         },
-                        "limit": {"type": "integer", "description": "Maximum number of results to return", "default": 10},
-                        "threshold": {"type": "number", "description": "Similarity threshold (0.0-1.0)", "default": 0.7}
+                        "limit": {
+                            "type": "integer", 
+                            "description": get_description(
+                                "limit",
+                                "Maximum number of results to return",
+                                default=10
+                            ),
+                            **get_default_value("limit", 10)
+                        },
+                        "threshold": {
+                            "type": "number", 
+                            "description": get_description(
+                                "threshold",
+                                "Similarity threshold (0.0-1.0)",
+                                default=0.7
+                            ),
+                            **get_default_value("threshold", 0.7)
+                        }
                     },
                     "required": ["query"],
                 },
@@ -309,7 +338,13 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
                 raise ValueError(f"No arguments provided for tool: {name}")
 
             if name == "create_entities":
-                entities = [Entity(**entity) for entity in arguments.get("entities", [])]
+                # Validate labels for each entity (now allows empty labels)
+                entity_data = arguments.get("entities", [])
+                for entity in entity_data:
+                    if "labels" in entity:
+                        validate_labels(entity["labels"])
+                
+                entities = [Entity(**entity) for entity in entity_data]
                 result = await mem.create_entities(entities)
                 return [types.TextContent(type="text", text=json.dumps([e.model_dump() for e in result], indent=2))]
                 
@@ -346,11 +381,16 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
                 return [types.TextContent(type="text", text=json.dumps(result.model_dump(), indent=2))]
                 
             elif name == "vector_search":
+                # Apply defaults and validate parameters
+                params = apply_vector_search_defaults(arguments)
+                validate_vector_search_mode(params["mode"])
+                validate_vector_search_params(params["limit"], params["threshold"])
+                
                 result = await mem.vector_search(
-                    query=arguments.get("query", ""),
-                    mode=arguments.get("mode", "content"),
-                    limit=arguments.get("limit", 10),
-                    threshold=arguments.get("threshold", 0.7)
+                    query=params["query"],
+                    mode=params["mode"],
+                    limit=params["limit"],
+                    threshold=params["threshold"]
                 )
                 return [types.TextContent(type="text", text=json.dumps(result.model_dump(), indent=2))]
                 
