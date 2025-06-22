@@ -19,9 +19,13 @@ def main():
     parser.add_argument("--database",
                         default=os.getenv("NEO4J_DATABASE", "neo4j"),
                         help="Neo4j database name")
+    parser.add_argument('--legacy-tools',
+                       required=True,
+                       choices=['enabled', 'disabled'],
+                       help='Enable or disable legacy query tools (read_graph, search_nodes, find_nodes, open_nodes). Required.')
     
     args = parser.parse_args()
-    asyncio.run(server.main(args.db_url, args.username, args.password, args.database))
+    asyncio.run(server.main(args.db_url, args.username, args.password, args.database, args.legacy_tools))
 
 
 # Optionally expose other important items at package level

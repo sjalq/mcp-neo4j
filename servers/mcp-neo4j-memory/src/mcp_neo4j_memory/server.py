@@ -50,8 +50,12 @@ class ObservationDeletion(BaseModel):
 
 # Old Neo4jMemory class removed - now using VectorEnabledNeo4jMemory
 
-async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_database: str):
+async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_database: str, legacy_tools: str):
     logger.info(f"Starting MCP Server with Neo4j URI: {neo4j_uri}")
+    logger.info(f"Legacy tools: {legacy_tools}")
+    
+    # Parse legacy tools flag
+    enable_legacy_tools = legacy_tools == "enabled"
 
     # Store connection details for lazy initialization
     memory = None
@@ -84,7 +88,8 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
     # Register handlers
     @server.list_tools()
     async def handle_list_tools() -> List[types.Tool]:
-        return [
+        # Core tools that are always available
+        tools = [
             types.Tool(
                 name="create_entities",
                 description="Create multiple new entities in the knowledge graph",
@@ -232,55 +237,6 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
                 },
             ),
             types.Tool(
-                name="read_graph",
-                description="Read the entire knowledge graph",
-                inputSchema={
-                    "type": "object",
-                    "properties": get_empty_object_properties(),
-                },
-            ),
-            types.Tool(
-                name="search_nodes",
-                description="Search for nodes in the knowledge graph based on a query",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "The search query to match against entity names, types, and observation content"},
-                    },
-                    "required": ["query"],
-                },
-            ),
-            types.Tool(
-                name="find_nodes",
-                description="Find specific nodes in the knowledge graph by their names",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "names": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "An array of entity names to retrieve",
-                        },
-                    },
-                    "required": ["names"],
-                },
-            ),
-            types.Tool(
-                name="open_nodes",
-                description="Open specific nodes in the knowledge graph by their names",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "names": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "An array of entity names to retrieve",
-                        },
-                    },
-                    "required": ["names"],
-                },
-            ),
-            types.Tool(
                 name="vector_search",
                 description="Semantic vector search across the knowledge graph using BGE-large embeddings",
                 inputSchema={
@@ -326,6 +282,63 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
                 },
             ),
         ]
+        
+        # Add legacy tools if enabled
+        if enable_legacy_tools:
+            legacy_tools = [
+                types.Tool(
+                    name="read_graph",
+                    description="Read the entire knowledge graph",
+                    inputSchema={
+                        "type": "object",
+                        "properties": get_empty_object_properties(),
+                    },
+                ),
+                types.Tool(
+                    name="search_nodes",
+                    description="Search for nodes in the knowledge graph based on a query",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "The search query to match against entity names, types, and observation content"},
+                        },
+                        "required": ["query"],
+                    },
+                ),
+                types.Tool(
+                    name="find_nodes",
+                    description="Find specific nodes in the knowledge graph by their names",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "names": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "An array of entity names to retrieve",
+                            },
+                        },
+                        "required": ["names"],
+                    },
+                ),
+                types.Tool(
+                    name="open_nodes",
+                    description="Open specific nodes in the knowledge graph by their names",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "names": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "An array of entity names to retrieve",
+                            },
+                        },
+                        "required": ["names"],
+                    },
+                ),
+            ]
+            tools.extend(legacy_tools)
+        
+        return tools
 
     @server.call_tool()
     async def handle_call_tool(
@@ -334,6 +347,11 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
         try:
             # Get memory instance (lazy connection)
             mem = get_memory()
+            
+            # Handle legacy tools with feature flag check
+            if name in ["read_graph", "search_nodes", "find_nodes", "open_nodes"]:
+                if not enable_legacy_tools:
+                    raise ValueError(f"Legacy tool '{name}' is disabled. Use --legacy-tools enabled to enable legacy query tools.")
             
             if name == "read_graph":
                 result = await mem.read_graph()
