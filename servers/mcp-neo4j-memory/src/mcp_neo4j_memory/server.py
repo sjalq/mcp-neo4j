@@ -309,6 +309,22 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
                     "required": ["query"],
                 },
             ),
+            types.Tool(
+                name="execute_cypher",
+                description="Execute a raw Cypher query on the knowledge graph database",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "The Cypher query to execute"},
+                        "params": {
+                            "type": "object",
+                            "description": "Optional parameters for the query",
+                            "additionalProperties": True
+                        }
+                    },
+                    "required": ["query"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -383,6 +399,12 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
                     threshold=threshold
                 )
                 return [types.TextContent(type="text", text=json.dumps(result.model_dump(), indent=2))]
+                
+            elif name == "execute_cypher":
+                query = arguments.get("query", "")
+                params = arguments.get("params", {})
+                result = await mem.execute_cypher(query, params)
+                return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
                 
             else:
                 raise ValueError(f"Unknown tool: {name}")

@@ -29,6 +29,31 @@ Results in Claude calling the create_entities and create_relations tools.
 
 ![](./docs/images/employee_graph.png)
 
+### 🔍 Advanced Cypher Queries
+
+With the `execute_cypher` tool, you can run complex queries directly:
+
+```cypher
+-- Find all people and their locations
+MATCH (person:Entity {type: 'Person'})-[r]->(location:Entity {type: 'Location'})
+RETURN person.name, type(r), location.name
+
+-- Count relationships by type
+MATCH ()-[r]->() 
+RETURN type(r) as relationship_type, count(r) as count
+ORDER BY count DESC
+
+-- Find entities with the most connections
+MATCH (n:Entity)-[r]-()
+RETURN n.name, n.type, count(r) as connections
+ORDER BY connections DESC LIMIT 10
+```
+
+**Example Usage:**
+```
+"Please execute this Cypher query: MATCH (p:Entity {type: 'Person'})-[:WORKS_AT]->(c:Entity {type: 'Company'}) RETURN p.name as person, c.name as company"
+```
+
 ## 📦 Components
 
 ### 🔧 Tools
@@ -52,6 +77,14 @@ The server offers these core tools:
    - Input:
      - `names` (array of strings): Entity names to retrieve
    - Returns: Subgraph with specified nodes
+
+- `execute_cypher`
+   - Execute raw Cypher queries on the knowledge graph database
+   - Input:
+     - `query` (string): The Cypher query to execute
+     - `params` (object, optional): Parameters for the query
+   - Returns: Query results with records and summary metadata
+   - ⚠️ **Advanced Usage**: Provides direct database access for complex queries
 
 #### ♟️ Entity Management Tools
 - `create_entities`

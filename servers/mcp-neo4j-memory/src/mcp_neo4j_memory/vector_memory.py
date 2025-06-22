@@ -707,4 +707,71 @@ class VectorEnabledNeo4jMemory:
                 "target": relation.target
             })
 
+    async def execute_cypher(self, query: str, params: dict = None) -> dict:
+        """Execute a raw Cypher query with minimal processing"""
+        try:
+            result = self.neo4j_driver.execute_query(
+                query, 
+                params or {}
+            )
+            
+            # Convert to serializable format
+            records_data = []
+            for record in result.records:
+                record_dict = {}
+                for key in record.keys():
+                    value = record[key]
+                    # Handle Neo4j data types
+                    if hasattr(value, '_properties'):  # Node or Relationship
+                        record_dict[key] = dict(value._properties)
+                        # Add metadata for nodes and relationships
+                        if hasattr(value, 'labels'):  # Node
+                            record_dict[key]['_labels'] = list(value.labels)
+                            record_dict[key]['_id'] = value.id
+                        elif hasattr(value, 'type'):  # Relationship
+                            record_dict[key]['_type'] = value.type
+                            record_dict[key]['_id'] = value.id
+                    elif isinstance(value, list):
+                        # Handle lists of Neo4j objects
+                        record_dict[key] = []
+                        for item in value:
+                            if hasattr(item, '_properties'):
+                                item_dict = dict(item._properties)
+                                if hasattr(item, 'labels'):
+                                    item_dict['_labels'] = list(item.labels)
+                                elif hasattr(item, 'type'):
+                                    item_dict['_type'] = item.type
+                                record_dict[key].append(item_dict)
+                            else:
+                                record_dict[key].append(item)
+                    else:
+                        record_dict[key] = value
+                records_data.append(record_dict)
+            
+            return {
+                "records": records_data,
+                "summary": {
+                    "counters": {
+                        "nodes_created": result.summary.counters.nodes_created,
+                        "nodes_deleted": result.summary.counters.nodes_deleted,  
+                        "relationships_created": result.summary.counters.relationships_created,
+                        "relationships_deleted": result.summary.counters.relationships_deleted,
+                        "properties_set": result.summary.counters.properties_set,
+                        "labels_added": result.summary.counters.labels_added,
+                        "labels_removed": result.summary.counters.labels_removed,
+                        "indexes_added": result.summary.counters.indexes_added,
+                        "indexes_removed": result.summary.counters.indexes_removed,
+                        "constraints_added": result.summary.counters.constraints_added,
+                        "constraints_removed": result.summary.counters.constraints_removed
+                    },
+                    "database": result.summary.database if result.summary.database else None,
+                    "query_type": result.summary.query_type,
+                    "result_consumed_after": str(result.summary.result_consumed_after),
+                    "result_available_after": str(result.summary.result_available_after)
+                }
+            }
+        except Exception as e:
+            logger.error(f"Cypher query error: {e}")
+            return {"error": str(e), "query": query}
+
  
