@@ -254,7 +254,7 @@ class TestIntelligentMerge:
         merge_call = merge_calls[0]
         merge_query = merge_call[0][0]
         
-        # Should NOT set Entity label for entities with custom labels
+        # Should NOT set Entity label for entities with custom labels  
         assert "SET e:Entity" not in merge_query
         
         # Reset mock for second test
@@ -276,5 +276,5 @@ class TestIntelligentMerge:
         merge_call = merge_calls[0]
         merge_query = merge_call[0][0]
         
-        # Should set Entity label for entities without custom labels
-        assert "ON CREATE SET e:Entity" in merge_query 
+        # Should set Xearch label for entities without custom labels
+        assert "ON CREATE SET e:Xearch" in merge_query 

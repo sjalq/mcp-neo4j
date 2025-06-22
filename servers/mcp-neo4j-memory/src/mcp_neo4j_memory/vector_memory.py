@@ -91,14 +91,14 @@ class VectorEnabledNeo4jMemory:
         for index_config in VECTOR_INDEXES:
             self._create_vector_index(**index_config)
 
-    def _create_vector_index(self, name: str, label: str, property: str):
-        """Create a universal vector index that works with any node"""
+    def _create_vector_index(self, name: str, property: str, label: str = None):
+        """Create a universal vector index that works with Entity labeled nodes"""
         try:
-            # Create index for specified label
+            # Create index for Entity label (all memory nodes get this label)
             query = f"""
             CREATE VECTOR INDEX {name} IF NOT EXISTS
-            FOR (m:{label}) 
-            ON m.{property}
+            FOR (n:{label}) 
+            ON n.{property}
             OPTIONS {{
                 indexConfig: {{
                     `vector.dimensions`: {EMBEDDING_DIMENSIONS},
@@ -107,7 +107,7 @@ class VectorEnabledNeo4jMemory:
             }}
             """
             self.neo4j_driver.execute_query(query)
-            logger.info(f"Created vector index: {name}")
+            logger.info(f"Created universal vector index: {name} for label {label}")
             
         except neo4j.exceptions.ClientError as e:
             if "already exists" in str(e):
@@ -192,38 +192,34 @@ class VectorEnabledNeo4jMemory:
             # Get labels and sanitize them (optional for all entities now)
             additional_labels = self._sanitize_labels(entity.labels)
             
-            # Always add Memory label for universal indexing, track user's intended labels
+            # Create entity with Xearch label (for vector search) and user labels
             if additional_labels:
                 merge_query = """
                 MERGE (e { name: $name, type: $type })
-                ON CREATE SET e:Memory, e.observations = $observations, e.user_labels = $user_labels
+                ON CREATE SET e:Xearch, e.observations = $observations, e.user_labels = $user_labels
                 ON MATCH SET e.observations = e.observations + [obs in $observations WHERE NOT obs IN e.observations], e.user_labels = $user_labels
-                SET e:Memory
                 SET e.embedding = $embedding
                 SET e.indexed_at = datetime()
                 """
-                params = {
-                    "name": entity.name,
-                    "type": entity.type,
-                    "observations": entity.observations,
-                    "user_labels": additional_labels,
-                    **embeddings
-                }
+                # Apply additional labels dynamically
+                for label in additional_labels:
+                    merge_query += f"\nSET e:`{label}`"
             else:
                 merge_query = """
                 MERGE (e { name: $name, type: $type })
-                ON CREATE SET e:Memory, e.observations = $observations
+                ON CREATE SET e:Xearch, e.observations = $observations
                 ON MATCH SET e.observations = e.observations + [obs in $observations WHERE NOT obs IN e.observations]
-                SET e:Memory
                 SET e.embedding = $embedding
                 SET e.indexed_at = datetime()
                 """
-                params = {
-                    "name": entity.name,
-                    "type": entity.type,
-                    "observations": entity.observations,
-                    **embeddings
-                }
+            
+            params = {
+                "name": entity.name,
+                "type": entity.type,
+                "observations": entity.observations,
+                "user_labels": additional_labels,
+                **embeddings
+            }
             
             self.neo4j_driver.execute_query(merge_query, params)
             
@@ -281,7 +277,7 @@ class VectorEnabledNeo4jMemory:
         
         vector_query = """
         CALL db.index.vector.queryNodes(
-            'memory_embeddings_v2', 
+            'universal_embeddings', 
             $limit, 
             $embedding
         )
@@ -290,7 +286,7 @@ class VectorEnabledNeo4jMemory:
         WITH node, score
         ORDER BY score DESC
         
-        // Get related entities within 1 hop (any memory node)
+        // Get related entities within 1 hop (any node with name/type)
         OPTIONAL MATCH (node)-[r]-(related)
         WHERE id(related) <> id(node) 
         AND (related.name IS NOT NULL AND related.type IS NOT NULL)
@@ -403,7 +399,7 @@ class VectorEnabledNeo4jMemory:
                 logger.info(f"Migrated batch {i//BATCH_SIZE + 1}")
 
     async def _update_embeddings_batch(self, entities: List):
-        """Update embeddings for existing entities and add Memory label"""
+        """Update embeddings for existing entities with Xearch label"""
         updates = []
         
         for entity in entities:
@@ -417,7 +413,7 @@ class VectorEnabledNeo4jMemory:
         UNWIND $updates as update
         MATCH (m {name: update.name})
         WHERE m.name IS NOT NULL AND m.type IS NOT NULL
-        SET m:Memory
+        SET m:Xearch
         SET m.embedding = update.embedding
         SET m.indexed_at = datetime()
         """

@@ -82,7 +82,7 @@ class TestMergeIntegration:
         
         # Verify only one Ethereum entity exists
         query = """
-        MATCH (e:Entity {name: 'Ethereum'})
+        MATCH (e:Xearch {name: 'Ethereum'})
         RETURN e.name as name, e.type as type, e.observations as observations, labels(e) as labels
         """
         
@@ -100,9 +100,9 @@ class TestMergeIntegration:
         for obs in expected_obs:
             assert obs in observations
         
-        # Should have Entity base label plus all additional labels
-        labels = record["labels"]
-        expected_labels = {"Entity", "Blockchain", "Technology", "Digital", "Platform"}
+        # Verify the final state has all expected labels
+        expected_labels = {"Blockchain", "Technology", "Digital", "Platform", "Xearch"}
+        labels = set(record["labels"])
         assert set(labels) == expected_labels
 
     async def test_different_entities_no_merge(self, neo4j_memory):
@@ -126,7 +126,7 @@ class TestMergeIntegration:
         
         # Should have two separate entities
         query = """
-        MATCH (e:Entity)
+        MATCH (e:Xearch)
         WHERE e.name IN ['Bitcoin', 'Ethereum']
         RETURN count(e) as count
         """
@@ -159,7 +159,7 @@ class TestMergeIntegration:
         
         # Check final state
         query = """
-        MATCH (e:Entity {name: 'TestMerge'})
+        MATCH (e:Xearch {name: 'TestMerge'})
         RETURN e.observations as observations
         """
         
@@ -187,7 +187,7 @@ class TestMergeIntegration:
         
         # Verify relation exists
         query = """
-        MATCH (a:Entity {name: 'Alice'})-[r:WORKS_WITH]->(b:Entity {name: 'Bob'})
+        MATCH (a:Xearch {name: 'Alice'})-[r:WORKS_WITH]->(b:Xearch {name: 'Bob'})
         RETURN count(r) as count
         """
         
@@ -219,14 +219,14 @@ class TestMergeIntegration:
         
         # Verify Entity label exists instead
         query = """
-        MATCH (n:Entity {name: 'NoMemoryTest'})
+        MATCH (n:Xearch {name: 'NoMemoryTest'})
         RETURN count(n) as count, labels(n) as labels
         """
         
         result = neo4j_memory.neo4j_driver.execute_query(query)
         assert result.records[0]["count"] == 1
         labels = result.records[0]["labels"]
-        assert "Entity" in labels
+        assert "Xearch" in labels
         assert "Test" in labels
         assert "Memory" not in labels
 
@@ -266,7 +266,7 @@ class TestMergeIntegration:
         except Exception as e:
             # If vector search fails, at least verify the entity merged correctly
             query = """
-            MATCH (e:Entity {name: 'Python'})
+            MATCH (e:Xearch {name: 'Python'})
             RETURN e.observations as observations
             """
             result = neo4j_memory.neo4j_driver.execute_query(query)

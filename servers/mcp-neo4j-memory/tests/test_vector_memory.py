@@ -112,7 +112,7 @@ class TestVectorEnabledNeo4jMemory:
         
         # Check correct single index was used
         call_args = memory_with_mocks.neo4j_driver.execute_query.call_args[0][0]
-        assert "entity_embeddings" in call_args
+        assert "universal_embeddings" in call_args
         
         # Ensure old index names are not used
         assert "entity_content_embeddings" not in call_args
@@ -143,9 +143,9 @@ class TestVectorEnabledNeo4jMemory:
         # Mock unindexed memories exist
         mock_result = MagicMock()
         mock_record1 = MagicMock()
-        mock_record1.__getitem__ = lambda self, key: {"name": "Cyril", "type": "Person", "observations": ["President"]}[key]
+        mock_record1.__getitem__ = lambda self, key: {"name": "Cyril", "type": "Person", "observations": ["President"], "labels": ["Person"]}[key]
         mock_record2 = MagicMock()
-        mock_record2.__getitem__ = lambda self, key: {"name": "SA", "type": "Country", "observations": ["Country"]}[key]
+        mock_record2.__getitem__ = lambda self, key: {"name": "SA", "type": "Country", "observations": ["Country"], "labels": ["Country"]}[key]
         mock_result.records = [mock_record1, mock_record2]
         
         memory_with_mocks.neo4j_driver.execute_query.return_value = mock_result
