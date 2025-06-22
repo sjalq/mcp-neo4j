@@ -287,17 +287,6 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
                     "type": "object",
                     "properties": {
                         "query": {"type": "string", "description": "The semantic search query"},
-                        "mode": {
-                            "type": "string", 
-                            **get_enum_constraint(["content", "observations", "identity"]),
-                            "description": get_description(
-                                "mode",
-                                "Search mode: content (full context), observations (behavior/facts), identity (name/type)",
-                                options=["content", "observations", "identity"],
-                                default="content"
-                            ),
-                            **get_default_value("mode", "content")
-                        },
                         "limit": {
                             "type": "integer", 
                             "description": get_description(
@@ -381,16 +370,17 @@ async def main(neo4j_uri: str, neo4j_user: str, neo4j_password: str, neo4j_datab
                 return [types.TextContent(type="text", text=json.dumps(result.model_dump(), indent=2))]
                 
             elif name == "vector_search":
-                # Apply defaults and validate parameters
-                params = apply_vector_search_defaults(arguments)
-                validate_vector_search_mode(params["mode"])
-                validate_vector_search_params(params["limit"], params["threshold"])
+                # Apply defaults and validate parameters (unified single embedding approach)
+                query = arguments.get("query")
+                limit = arguments.get("limit", 10)
+                threshold = arguments.get("threshold", 0.7)
+                
+                validate_vector_search_params(limit, threshold)
                 
                 result = await mem.vector_search(
-                    query=params["query"],
-                    mode=params["mode"],
-                    limit=params["limit"],
-                    threshold=params["threshold"]
+                    query=query,
+                    limit=limit,
+                    threshold=threshold
                 )
                 return [types.TextContent(type="text", text=json.dumps(result.model_dump(), indent=2))]
                 

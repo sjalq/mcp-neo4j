@@ -46,7 +46,7 @@ class TestVectorEnabledNeo4jMemory:
             assert memory.encoder.max_seq_length == 512
     
     def test_generate_embeddings(self, memory_with_mocks):
-        """Test multi-level embedding generation"""
+        """Test single unified embedding generation"""
         entity = Entity(
             name="Cyril Ramaphosa",
             type="Person", 
@@ -55,24 +55,22 @@ class TestVectorEnabledNeo4jMemory:
         
         embeddings = memory_with_mocks._generate_embeddings(entity)
         
-        # Check all three embedding types are generated
-        assert "content_embedding" in embeddings
-        assert "observation_embedding" in embeddings
-        assert "identity_embedding" in embeddings
+        # Check single embedding is generated
+        assert "embedding" in embeddings
+        assert len(embeddings) == 1  # Only one embedding now
         
-        # Check encoder was called 3 times
-        assert memory_with_mocks.encoder.encode.call_count == 3
+        # Check encoder was called once (not three times)
+        assert memory_with_mocks.encoder.encode.call_count == 1
         
-        # Verify content composition
-        calls = memory_with_mocks.encoder.encode.call_args_list
-        content_call = calls[0][0][0]
-        assert "Cyril Ramaphosa is a Person" in content_call
-        assert "Is president of South Africa" in content_call
-        assert "Stashed cash in couch" in content_call
+        # Verify content composition includes all context
+        call_content = memory_with_mocks.encoder.encode.call_args[0][0]
+        assert "Cyril Ramaphosa is a Person" in call_content
+        assert "Is president of South Africa" in call_content
+        assert "Stashed cash in couch" in call_content
 
     @pytest.mark.asyncio
     async def test_create_entities_with_embeddings(self, memory_with_mocks):
-        """Test entity creation includes embedding generation"""
+        """Test entity creation includes single embedding generation"""
         entities = [
             Entity(name="Cyril", type="Person", observations=["President"]),
             Entity(name="South Africa", type="Country", observations=["Has president"])
@@ -83,20 +81,19 @@ class TestVectorEnabledNeo4jMemory:
         
         result = await memory_with_mocks.create_entities(entities)
         
-        # Check embeddings were generated
-        assert memory_with_mocks.encoder.encode.call_count == 6  # 3 per entity
+        # Check embeddings were generated (1 per entity now)
+        assert memory_with_mocks.encoder.encode.call_count == 2  # 1 per entity
         
-        # Check database query was called (multiple times for indexes + entities)
+        # Check database query was called
         assert memory_with_mocks.neo4j_driver.execute_query.call_count >= 1
         
         # Core functionality test - embeddings were generated
-        # The method should have generated embeddings and returned the entities
         assert result == entities
         assert len(result) == 2
 
     @pytest.mark.asyncio
-    async def test_vector_search_modes(self, memory_with_mocks):
-        """Test different vector search modes"""
+    async def test_vector_search_unified(self, memory_with_mocks):
+        """Test unified vector search without modes"""
         # Mock database response
         mock_result = MagicMock()
         mock_result.records = [MagicMock()]
@@ -107,31 +104,24 @@ class TestVectorEnabledNeo4jMemory:
         
         memory_with_mocks.neo4j_driver.execute_query.return_value = mock_result
         
-        # Test content mode
-        result = await memory_with_mocks.vector_search("who is president", mode="content")
+        # Test unified search (no mode parameter)
+        result = await memory_with_mocks.vector_search("who is president")
         
         # Check encoder was called for query
         memory_with_mocks.encoder.encode.assert_called()
         
-        # Check correct index was used
+        # Check correct single index was used
         call_args = memory_with_mocks.neo4j_driver.execute_query.call_args[0][0]
-        assert "entity_content_embeddings" in call_args
+        assert "entity_embeddings" in call_args
         
-        # Test observations mode
-        await memory_with_mocks.vector_search("leadership behavior", mode="observations")
-        
-        call_args = memory_with_mocks.neo4j_driver.execute_query.call_args[0][0]
-        assert "entity_observation_embeddings" in call_args
-        
-        # Test identity mode
-        await memory_with_mocks.vector_search("Cyril Ramaphosa", mode="identity")
-        
-        call_args = memory_with_mocks.neo4j_driver.execute_query.call_args[0][0]
-        assert "entity_identity_embeddings" in call_args
+        # Ensure old index names are not used
+        assert "entity_content_embeddings" not in call_args
+        assert "entity_observation_embeddings" not in call_args
+        assert "entity_identity_embeddings" not in call_args
 
     @pytest.mark.asyncio
-    async def test_smart_search_routing(self, memory_with_mocks):
-        """Test intelligent search routing logic"""
+    async def test_smart_search_simplified(self, memory_with_mocks):
+        """Test simplified smart search routing"""
         
         # Mock methods
         memory_with_mocks.find_nodes = AsyncMock(return_value=MagicMock(entities=[]))
@@ -141,14 +131,10 @@ class TestVectorEnabledNeo4jMemory:
         await memory_with_mocks.smart_search("Cyril")
         memory_with_mocks.find_nodes.assert_called_once()
         
-        # Question query → should use content search
+        # Long query → should use unified vector search (no mode parameter)
         memory_with_mocks.find_nodes.reset_mock()
-        await memory_with_mocks.smart_search("what is the capital?")
-        memory_with_mocks.vector_search.assert_called_with("what is the capital?", mode="content", limit=10)
-        
-        # Behavioral query → should use observations search
-        await memory_with_mocks.smart_search("does Cyril lead effectively?")
-        memory_with_mocks.vector_search.assert_called_with("does Cyril lead effectively?", mode="observations", limit=10)
+        await memory_with_mocks.smart_search("what is the capital of South Africa?")
+        memory_with_mocks.vector_search.assert_called_with("what is the capital of South Africa?", limit=10)
 
     @pytest.mark.asyncio
     async def test_migration_functionality(self, memory_with_mocks):
@@ -169,16 +155,12 @@ class TestVectorEnabledNeo4jMemory:
         # Check update query was called
         assert memory_with_mocks.neo4j_driver.execute_query.call_count >= 2
         
-        # Check embeddings were generated during migration
-        assert memory_with_mocks.encoder.encode.call_count >= 6
+        # Check embeddings were generated during migration (1 per entity)
+        assert memory_with_mocks.encoder.encode.call_count >= 2
 
     @pytest.mark.asyncio
     async def test_ensure_all_indexed(self, memory_with_mocks):
         """Test automatic indexing check on startup"""
-        
-        # Mock count query - has unindexed items
-        mock_count_result = MagicMock()
-        mock_count_result.records = [{"unindexed_count": 5}]
         
         # Mock migration
         memory_with_mocks.migrate_existing_memories = AsyncMock()
@@ -198,7 +180,7 @@ class TestVectorEnabledNeo4jMemory:
 
     @pytest.mark.asyncio
     async def test_add_observations_updates_embeddings(self, memory_with_mocks):
-        """Test that adding observations updates embeddings"""
+        """Test that adding observations updates single embedding"""
         
         from mcp_neo4j_memory.server import ObservationAddition
         
@@ -223,26 +205,26 @@ class TestVectorEnabledNeo4jMemory:
         
         await memory_with_mocks.add_observations(observations)
         
-        # Check embeddings were regenerated
-        assert memory_with_mocks.encoder.encode.call_count == 3
+        # Check single embedding was regenerated
+        assert memory_with_mocks.encoder.encode.call_count == 1
         
-        # Check update query was executed (multiple calls including indexes)
+        # Check update query was executed
         assert memory_with_mocks.neo4j_driver.execute_query.call_count >= 3
 
     def test_vector_index_creation(self, memory_with_mocks):
-        """Test vector indexes are created correctly"""
+        """Test single vector index is created correctly"""
         
         # Check that _ensure_vector_indexes was called during init
         expected_calls = len(memory_with_mocks.neo4j_driver.execute_query.call_args_list)
         
-        # Should have created fulltext + 3 vector indexes
-        assert expected_calls >= 4
+        # Should have created fulltext + 1 vector index
+        assert expected_calls >= 2
         
         # Check vector index creation queries
         calls = memory_with_mocks.neo4j_driver.execute_query.call_args_list
         vector_calls = [call for call in calls if "CREATE VECTOR INDEX" in str(call)]
         
-        assert len(vector_calls) == 3  # content, observation, identity
+        assert len(vector_calls) == 1  # Only one index now
 
     @pytest.mark.asyncio
     async def test_batch_processing(self, memory_with_mocks):
@@ -258,8 +240,8 @@ class TestVectorEnabledNeo4jMemory:
         
         await memory_with_mocks.create_entities(entities)
         
-        # Check embeddings were generated for all entities
-        assert memory_with_mocks.encoder.encode.call_count == 150  # 3 per entity
+        # Check embeddings were generated for all entities (1 per entity)
+        assert memory_with_mocks.encoder.encode.call_count == 50  # 1 per entity
 
     @pytest.mark.asyncio 
     async def test_relation_context_embeddings(self, memory_with_mocks):
@@ -276,12 +258,8 @@ class TestVectorEnabledNeo4jMemory:
         await memory_with_mocks.create_relations(relations)
         
         # Check context embedding was generated
-        # The encoder should have been called with the relation context text
         encoder_calls = [call[0][0] for call in memory_with_mocks.encoder.encode.call_args_list]
         assert "Cyril IS_PRESIDENT_OF South Africa" in encoder_calls
-        
-        # Check that relations were created successfully (log message indicates success)
-        # The actual database call validation is less important than functional correctness
 
     @pytest.mark.asyncio
     async def test_search_fallback_to_fulltext(self, memory_with_mocks):
@@ -348,7 +326,7 @@ class TestVectorMemoryPerformance:
     @pytest.mark.benchmark
     @pytest.mark.asyncio
     async def test_embedding_generation_performance(self, memory_with_mocks, benchmark):
-        """Benchmark embedding generation speed"""
+        """Benchmark single embedding generation speed"""
         
         entity = Entity(
             name="Test Entity",
@@ -359,8 +337,8 @@ class TestVectorMemoryPerformance:
         # Benchmark the embedding generation
         result = benchmark(memory_with_mocks._generate_embeddings, entity)
         
-        assert "content_embedding" in result
-        assert len(result["content_embedding"]) == 1024
+        assert "embedding" in result
+        assert len(result["embedding"]) == 1024
 
     @pytest.mark.benchmark
     @pytest.mark.asyncio 

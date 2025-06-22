@@ -14,8 +14,7 @@ from .config import (
     EMBEDDING_DIMENSIONS, 
     SIMILARITY_THRESHOLD, 
     BATCH_SIZE,
-    VECTOR_INDEXES,
-    SEARCH_MODES
+    VECTOR_INDEXES
 )
 
 logger = logging.getLogger(__name__)
@@ -121,25 +120,13 @@ class VectorEnabledNeo4jMemory:
                 raise e
 
     def _generate_embeddings(self, entity) -> Dict[str, List[float]]:
-        """Generate multiple embeddings for different search contexts"""
+        """Generate single unified embedding combining all entity context"""
         
-        # 1. Full content embedding (name + type + all observations)
-        full_content = f"{entity.name} is a {entity.type}. {' '.join(entity.observations)}"
-        content_embedding = self.encoder.encode(full_content).tolist()
+        # Combine all entity context into one comprehensive text
+        full_context = f"{entity.name} is a {entity.type}. {' '.join(entity.observations)}"
+        embedding = self.encoder.encode(full_context).tolist()
         
-        # 2. Observation-only embedding (for semantic observation search)
-        observation_content = ' '.join(entity.observations) if entity.observations else entity.name
-        observation_embedding = self.encoder.encode(observation_content).tolist()
-        
-        # 3. Entity identity embedding (name + type only)
-        identity_content = f"{entity.name} ({entity.type})"
-        identity_embedding = self.encoder.encode(identity_content).tolist()
-        
-        return {
-            "content_embedding": content_embedding,
-            "observation_embedding": observation_embedding, 
-            "identity_embedding": identity_embedding
-        }
+        return {"embedding": embedding}
 
     def _sanitize_labels(self, labels: Optional[List[str]]) -> List[str]:
         """Sanitize and CamelCase labels according to Neo4j rules"""
@@ -198,9 +185,7 @@ class VectorEnabledNeo4jMemory:
                 MERGE (e { name: $name, type: $type })
                 ON CREATE SET e:Entity, e.observations = $observations, e.user_labels = $user_labels
                 ON MATCH SET e.observations = e.observations + [obs in $observations WHERE NOT obs IN e.observations], e.user_labels = $user_labels
-                SET e.content_embedding = $content_embedding
-                SET e.observation_embedding = $observation_embedding
-                SET e.identity_embedding = $identity_embedding
+                SET e.embedding = $embedding
                 SET e.indexed_at = datetime()
                 """
                 params = {
@@ -215,9 +200,7 @@ class VectorEnabledNeo4jMemory:
                 MERGE (e { name: $name, type: $type })
                 ON CREATE SET e:Entity, e.observations = $observations
                 ON MATCH SET e.observations = e.observations + [obs in $observations WHERE NOT obs IN e.observations]
-                SET e.content_embedding = $content_embedding
-                SET e.observation_embedding = $observation_embedding
-                SET e.identity_embedding = $identity_embedding
+                SET e.embedding = $embedding
                 SET e.indexed_at = datetime()
                 """
                 params = {
@@ -274,28 +257,16 @@ class VectorEnabledNeo4jMemory:
     async def vector_search(
         self, 
         query: str, 
-        mode: str = "content",
         limit: int = 10,
         threshold: float = SIMILARITY_THRESHOLD
     ):
-        """Advanced vector search with multiple modes"""
+        """Unified vector search with single embedding index"""
         
         query_embedding = self.encoder.encode(query).tolist()
         
-        # Choose embedding field based on search mode
-        embedding_property = SEARCH_MODES.get(mode, "content_embedding")
-        
-        # Map search modes to actual index names
-        index_mapping = {
-            "content": "entity_content_embeddings",
-            "observations": "entity_observation_embeddings",
-            "identity": "entity_identity_embeddings"
-        }
-        index_name = index_mapping.get(mode, "entity_content_embeddings")
-        
-        vector_query = f"""
+        vector_query = """
         CALL db.index.vector.queryNodes(
-            '{index_name}', 
+            'entity_embeddings', 
             $limit, 
             $embedding
         )
@@ -313,17 +284,17 @@ class VectorEnabledNeo4jMemory:
              collect(DISTINCT related)[0..5] as related_nodes,
              collect(DISTINCT r)[0..10] as related_rels
         
-        RETURN collect({{
+        RETURN collect({
             name: node.name,
             type: node.type, 
             observations: node.observations,
             score: score
-        }}) as nodes,
-        collect(DISTINCT {{
+        }) as nodes,
+        collect(DISTINCT {
             source: startNode(related_rels[0]).name,
             target: endNode(related_rels[0]).name, 
             relationType: type(related_rels[0])
-        }}) as relations
+        }) as relations
         """
         
         result = self.neo4j_driver.execute_query(vector_query, {
@@ -367,7 +338,7 @@ class VectorEnabledNeo4jMemory:
         return KnowledgeGraph(entities=entities, relations=relations)
 
     async def smart_search(self, query: str, limit: int = 10):
-        """Intelligent search routing based on query characteristics"""
+        """Intelligent search with unified vector search"""
         
         query_lower = query.lower()
         words = query.split()
@@ -378,25 +349,17 @@ class VectorEnabledNeo4jMemory:
             if exact_result.entities:
                 return exact_result
         
-        # Question-based queries → content search
-        if any(q in query_lower for q in ['what is', 'who is', 'tell me about', 'explain']):
-            return await self.vector_search(query, mode="content", limit=limit)
-        
-        # Behavioral/observational queries → observation search  
-        if any(q in query_lower for q in ['does', 'can', 'did', 'involved in', 'related to']):
-            return await self.vector_search(query, mode="observations", limit=limit)
-        
-        # Default: hybrid content search
-        return await self.vector_search(query, mode="content", limit=limit)
+        # Default: unified vector search for all queries
+        return await self.vector_search(query, limit=limit)
 
     # Migration methods
     async def migrate_existing_memories(self):
         """Add embeddings to existing memories that lack them"""
         
-        # Find unindexed entities
+        # Find unindexed entities (check for new single embedding property)
         query = """
         MATCH (m:Entity)
-        WHERE m.content_embedding IS NULL
+        WHERE m.embedding IS NULL
         RETURN m.name as name, m.type as type, m.observations as observations
         ORDER BY m.name
         """
@@ -436,9 +399,7 @@ class VectorEnabledNeo4jMemory:
         query = """
         UNWIND $updates as update
         MATCH (m:Entity {name: update.name})
-        SET m.content_embedding = update.content_embedding
-        SET m.observation_embedding = update.observation_embedding  
-        SET m.identity_embedding = update.identity_embedding
+        SET m.embedding = update.embedding
         SET m.indexed_at = datetime()
         """
         
@@ -447,10 +408,10 @@ class VectorEnabledNeo4jMemory:
     async def ensure_all_indexed(self):
         """Ensure all memories have embeddings, migrate if needed"""
         
-        # Count unindexed items
+        # Count unindexed items (check for new single embedding property)
         count_query = """
         MATCH (m:Entity)
-        WHERE m.content_embedding IS NULL
+        WHERE m.embedding IS NULL
         RETURN count(m) as unindexed_count
         """
         
@@ -652,9 +613,7 @@ class VectorEnabledNeo4jMemory:
                 update_query = """
                 MATCH (e { name: $name })
                 WHERE e:Entity OR (e.name IS NOT NULL AND e.type IS NOT NULL)
-                SET e.content_embedding = $content_embedding
-                SET e.observation_embedding = $observation_embedding
-                SET e.identity_embedding = $identity_embedding
+                SET e.embedding = $embedding
                 SET e.indexed_at = datetime()
                 """
                 
@@ -716,9 +675,7 @@ class VectorEnabledNeo4jMemory:
                 update_query = """
                 MATCH (e { name: $name })
                 WHERE e:Entity OR (e.name IS NOT NULL AND e.type IS NOT NULL)
-                SET e.content_embedding = $content_embedding
-                SET e.observation_embedding = $observation_embedding
-                SET e.identity_embedding = $identity_embedding
+                SET e.embedding = $embedding
                 SET e.indexed_at = datetime()
                 """
                 
