@@ -92,9 +92,9 @@ class VectorEnabledNeo4jMemory:
             self._create_vector_index(**index_config)
 
     def _create_vector_index(self, name: str, label: str, property: str):
-        """Create a single vector index that works with any memory node"""
+        """Create a universal vector index that works with any node"""
         try:
-            # Create index for Entity label (for backward compatibility)
+            # Create index for specified label
             query = f"""
             CREATE VECTOR INDEX {name} IF NOT EXISTS
             FOR (m:{label}) 
@@ -109,9 +109,6 @@ class VectorEnabledNeo4jMemory:
             self.neo4j_driver.execute_query(query)
             logger.info(f"Created vector index: {name}")
             
-            # Note: Neo4j doesn't support WHERE clauses in vector index creation
-            # We'll handle this by ensuring all memory nodes get Entity label for indexing
-            
         except neo4j.exceptions.ClientError as e:
             if "already exists" in str(e):
                 logger.info(f"Vector index {name} already exists")
@@ -120,10 +117,26 @@ class VectorEnabledNeo4jMemory:
                 raise e
 
     def _generate_embeddings(self, entity) -> Dict[str, List[float]]:
-        """Generate single unified embedding combining all entity context"""
+        """Generate comprehensive embedding including all relevant properties"""
         
-        # Combine all entity context into one comprehensive text
-        full_context = f"{entity.name} is a {entity.type}. {' '.join(entity.observations)}"
+        # Get all labels for this entity (from Neo4j labels, not user_labels property)
+        labels = getattr(entity, 'labels', []) or []
+        labels_text = ' '.join(labels) if labels else ''
+        
+        # Build comprehensive context including all semantic information
+        context_parts = [
+            f"{entity.name} is a {entity.type}"
+        ]
+        
+        if labels_text:
+            context_parts.append(f"with labels {labels_text}")
+            
+        if entity.observations:
+            context_parts.append(f". {' '.join(entity.observations)}")
+        else:
+            context_parts.append(".")
+            
+        full_context = ' '.join(context_parts)
         embedding = self.encoder.encode(full_context).tolist()
         
         return {"embedding": embedding}
@@ -179,12 +192,13 @@ class VectorEnabledNeo4jMemory:
             # Get labels and sanitize them (optional for all entities now)
             additional_labels = self._sanitize_labels(entity.labels)
             
-            # Always add Entity label for indexing, track user's intended labels
+            # Always add Memory label for universal indexing, track user's intended labels
             if additional_labels:
                 merge_query = """
                 MERGE (e { name: $name, type: $type })
-                ON CREATE SET e:Entity, e.observations = $observations, e.user_labels = $user_labels
+                ON CREATE SET e:Memory, e.observations = $observations, e.user_labels = $user_labels
                 ON MATCH SET e.observations = e.observations + [obs in $observations WHERE NOT obs IN e.observations], e.user_labels = $user_labels
+                SET e:Memory
                 SET e.embedding = $embedding
                 SET e.indexed_at = datetime()
                 """
@@ -198,8 +212,9 @@ class VectorEnabledNeo4jMemory:
             else:
                 merge_query = """
                 MERGE (e { name: $name, type: $type })
-                ON CREATE SET e:Entity, e.observations = $observations
+                ON CREATE SET e:Memory, e.observations = $observations
                 ON MATCH SET e.observations = e.observations + [obs in $observations WHERE NOT obs IN e.observations]
+                SET e:Memory
                 SET e.embedding = $embedding
                 SET e.indexed_at = datetime()
                 """
@@ -260,13 +275,13 @@ class VectorEnabledNeo4jMemory:
         limit: int = 10,
         threshold: float = SIMILARITY_THRESHOLD
     ):
-        """Unified vector search with single embedding index"""
+        """Universal vector search across all nodes with embeddings"""
         
         query_embedding = self.encoder.encode(query).tolist()
         
         vector_query = """
         CALL db.index.vector.queryNodes(
-            'entity_embeddings', 
+            'memory_embeddings_v2', 
             $limit, 
             $embedding
         )
@@ -278,7 +293,7 @@ class VectorEnabledNeo4jMemory:
         // Get related entities within 1 hop (any memory node)
         OPTIONAL MATCH (node)-[r]-(related)
         WHERE id(related) <> id(node) 
-        AND (related:Entity OR (related.name IS NOT NULL AND related.type IS NOT NULL))
+        AND (related.name IS NOT NULL AND related.type IS NOT NULL)
         
         WITH node, score, 
              collect(DISTINCT related)[0..5] as related_nodes,
@@ -356,11 +371,11 @@ class VectorEnabledNeo4jMemory:
     async def migrate_existing_memories(self):
         """Add embeddings to existing memories that lack them"""
         
-        # Find unindexed entities (check for new single embedding property)
+        # Find unindexed entities - get labels too for embedding generation
         query = """
-        MATCH (m:Entity)
-        WHERE m.embedding IS NULL
-        RETURN m.name as name, m.type as type, m.observations as observations
+        MATCH (m)
+        WHERE m.name IS NOT NULL AND m.type IS NOT NULL AND m.embedding IS NULL
+        RETURN m.name as name, m.type as type, m.observations as observations, labels(m) as labels
         ORDER BY m.name
         """
         
@@ -369,10 +384,12 @@ class VectorEnabledNeo4jMemory:
         
         for record in result.records:
             from .server import Entity
+            # Create entity with labels included
             entity = Entity(
                 name=record["name"],
                 type=record["type"], 
-                observations=record["observations"] or []
+                observations=record["observations"] or [],
+                labels=record["labels"] or []  # Include actual Neo4j labels
             )
             unindexed.append(entity)
         
@@ -386,7 +403,7 @@ class VectorEnabledNeo4jMemory:
                 logger.info(f"Migrated batch {i//BATCH_SIZE + 1}")
 
     async def _update_embeddings_batch(self, entities: List):
-        """Update embeddings for existing entities"""
+        """Update embeddings for existing entities and add Memory label"""
         updates = []
         
         for entity in entities:
@@ -398,7 +415,9 @@ class VectorEnabledNeo4jMemory:
         
         query = """
         UNWIND $updates as update
-        MATCH (m:Entity {name: update.name})
+        MATCH (m {name: update.name})
+        WHERE m.name IS NOT NULL AND m.type IS NOT NULL
+        SET m:Memory
         SET m.embedding = update.embedding
         SET m.indexed_at = datetime()
         """
@@ -408,10 +427,10 @@ class VectorEnabledNeo4jMemory:
     async def ensure_all_indexed(self):
         """Ensure all memories have embeddings, migrate if needed"""
         
-        # Count unindexed items (check for new single embedding property)
+        # Count unindexed items - look for memory-like nodes regardless of labels
         count_query = """
-        MATCH (m:Entity)
-        WHERE m.embedding IS NULL
+        MATCH (m)
+        WHERE m.name IS NOT NULL AND m.type IS NOT NULL AND m.embedding IS NULL
         RETURN count(m) as unindexed_count
         """
         
